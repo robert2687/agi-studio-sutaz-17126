@@ -1,15 +1,21 @@
-
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
 import { DesignSystem, SemanticChange, PersonalityProfile, MemorySummary, ErrorChatMessage } from "./types";
 
 const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 
+const PRO_MODEL = 'gemini-3-pro-preview';
+const MAX_THINKING = 32768;
+
 const getPersonalityInstruction = (p: PersonalityProfile) => {
   switch (p) {
-    case 'Minimalist': return "Be concise. Use as little code as possible. No fluff. Zen-like clarity. Prefer single-responsibility files.";
-    case 'Enterprise': return "Think Enterprise. Scalability is key. Enforce robust patterns (DI, Clean Architecture). Verbose documentation. Safety first.";
-    case 'Playful': return "Be delightful. Use micro-interactions. Bright, fun tone. Friendly code comments. Creativity over strict convention.";
-    case 'Experimental': return "Be a boundary pusher. Use the latest features. Unconventional layouts. Dark, neon, futuristic vibes. Take architectural risks.";
+    case 'Minimalist': return "Be concise. Use single-responsibility components. Zero dependencies unless critical.";
+    case 'Enterprise': return "Standardize everything. Robust types, error boundaries, and detailed documentation.";
+    case 'Playful': return "Vibrant, interactive, and creative UI patterns. Surprising micro-interactions.";
+    case 'Experimental': return "Bleeding-edge React 19 features, unconventional CSS patterns, and bold UX.";
+    case 'Competitive': return `MISSION: High-performance algorithmic synthesis. 
+    STRATEGY: O(N log N) or better. Formalize constraints first.
+    CODE: Production-grade, type-safe, and zero bloat.
+    WORKFLOW: Analyze -> Plan -> Execute -> Formal Verification.`;
     default: return "";
   }
 };
@@ -23,218 +29,45 @@ export const getCopilotEdit = async (
   onChunk: (text: string) => void
 ) => {
   const ai = getAI();
-  const prompt = `ROLE: Neural Copilot. TUNING: ${personality}.
+  const prompt = `ROLE: Neural Copilot. PERSONALITY: ${personality}.
   
-  TASK: Transform or generate code based on this instruction: "${instruction}"
+  TASK: ${instruction}
+  SELECTION: ${selection || "Full context provided."}
+  FILE_CONTENT: ${fullFile}
+  DESIGN_SYSTEM: ${JSON.stringify(design)}
   
-  CONTEXT:
-  - FILE CONTENT: ${fullFile}
-  - CURRENT SELECTION: ${selection || "None (Generate new code)"}
-  - DESIGN SYSTEM: ${JSON.stringify(design)}
-  
-  RULES:
-  1. If selection exists, replace it with the corrected/new code.
-  2. If no selection, generate the code for the instruction at the current cursor position.
-  3. Respond ONLY with the raw code. Do not use markdown blocks (\`\`\`).
-  4. Follow the design system strictly.
-  5. Adhere to ${personality} coding style.`;
+  Respond ONLY with raw code. No markdown. No comments outside the code.`;
 
-  const responseStream = await ai.models.generateContentStream({
-    model: "gemini-3-pro-preview",
+  const stream = await ai.models.generateContentStream({
+    model: PRO_MODEL,
     contents: prompt,
+    config: { thinkingConfig: { thinkingBudget: MAX_THINKING } }
   });
 
-  let fullContent = "";
-  for await (const chunk of responseStream) {
+  let content = "";
+  for await (const chunk of stream) {
     const text = (chunk as GenerateContentResponse).text;
     if (text) {
-      fullContent += text;
-      onChunk(fullContent);
+      content += text;
+      onChunk(content);
     }
   }
-  return fullContent;
-};
-
-export const getErrorInsight = async (
-  errorMsg: string,
-  filePath: string,
-  fileContent: string,
-  question: string,
-  history: ErrorChatMessage[],
-  personality: PersonalityProfile
-): Promise<string> => {
-  const ai = getAI();
-  const response = await ai.models.generateContent({
-    model: "gemini-3-pro-preview",
-    contents: `ROLE: Neural Debugging Specialist. TUNING: ${personality}.
-    
-    CONTEXT:
-    ERROR: ${errorMsg}
-    FILE: ${filePath}
-    CONTENT: ${fileContent.slice(0, 3000)}
-    
-    HISTORY:
-    ${history.map(m => `${m.role}: ${m.content}`).join('\n')}
-    
-    USER QUESTION: ${question}
-    
-    Provide a deep, expert-level insight focusing on the root cause and architectural implications. Keep it in line with the ${personality} profile.`,
-  });
-  return response.text || "Neural connection lost. Please retry.";
-};
-
-export const getMemoryCompressionResponse = async (
-  logs: string[],
-  changes: SemanticChange[],
-  srs: string,
-  errors: string[],
-  personality: PersonalityProfile,
-  epoch: number
-): Promise<MemorySummary> => {
-  const ai = getAI();
-  const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: `ROLE: Neural Memory Optimizer. TUNING: ${personality}.
-    Summarize the current project state into a concise MemorySummary for Epoch ${epoch}.
-    
-    INPUT LOGS: ${logs.join('\n').slice(-5000)}
-    SEMANTIC CHANGES: ${JSON.stringify(changes)}
-    SYSTEM REQUIREMENTS: ${srs}
-    PENDING ERRORS: ${errors.join(', ')}
-    
-    CRITICAL RULES:
-    1. Preserve high-level architectural intent.
-    2. Identify unresolved issues that must be addressed.
-    3. Identify "Key Learnings" about the codebase.
-    4. Provide directives that MUST be carried over to the next epoch.`,
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          immutableDirectives: { type: Type.ARRAY, items: { type: Type.STRING } },
-          architecturalStatus: { type: Type.STRING },
-          unresolvedIssues: { type: Type.ARRAY, items: { type: Type.STRING } },
-          compressionRatio: { type: Type.STRING },
-          keyLearnings: { type: Type.ARRAY, items: { type: Type.STRING } }
-        },
-        required: ["immutableDirectives", "architecturalStatus", "unresolvedIssues", "compressionRatio", "keyLearnings"]
-      }
-    }
-  });
-  const result = JSON.parse(response.text || "{}");
-  return {
-    ...result,
-    epoch,
-    timestamp: Date.now()
-  };
-};
-
-export const getErrorAnalysis = async (
-  errorMsg: string,
-  filePath: string,
-  content: string,
-  personality: PersonalityProfile
-) => {
-  const ai = getAI();
-  const response = await ai.models.generateContent({
-    model: "gemini-3-pro-preview",
-    contents: `ROLE: Neural Debugger. TUNING: ${personality}.
-    
-    ANALYZING ERROR: "${errorMsg}"
-    FILE: ${filePath}
-    CONTENT (SNIPPET): ${content.slice(0, 2000)}
-    
-    GOAL:
-    1. Break down why this happened in multiple steps of reasoning.
-    2. Propose 3 distinct patch strategies with impact, risk scores, and confidence (0-1).`,
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          reasoning: { type: Type.ARRAY, items: { type: Type.STRING } },
-          strategies: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                label: { type: Type.STRING },
-                description: { type: Type.STRING },
-                impact: { type: Type.STRING, enum: ['low', 'medium', 'high'] },
-                risk: { type: Type.STRING, enum: ['low', 'medium', 'high'] },
-                codeSnippet: { type: Type.STRING },
-                confidence: { type: Type.NUMBER }
-              },
-              required: ["label", "description", "impact", "risk", "confidence"]
-            }
-          }
-        },
-        required: ["reasoning", "strategies"]
-      }
-    }
-  });
-  return JSON.parse(response.text || "{}");
-};
-
-export const getDesignSystemValidation = async (
-  filePath: string,
-  content: string,
-  design: DesignSystem,
-  personality: PersonalityProfile
-) => {
-  const ai = getAI();
-  const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: `ROLE: Design System Auditor. TUNING: ${personality}.
-    ${getPersonalityInstruction(personality)}
-    
-    Audit ${filePath} against Design System:
-    ${JSON.stringify(design)}
-    
-    CONTENT:
-    ${content.slice(0, 3000)}`,
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          score: { type: Type.NUMBER },
-          summary: { type: Type.STRING },
-          violations: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                property: { type: Type.STRING },
-                violation: { type: Type.STRING },
-                suggestion: { type: Type.STRING },
-                severity: { type: Type.STRING, enum: ['warning', 'error'] }
-              },
-              required: ["property", "violation", "suggestion", "severity"]
-            }
-          }
-        },
-        required: ["score", "summary", "violations"]
-      }
-    }
-  });
-  return JSON.parse(response.text || "{}");
+  return content;
 };
 
 export const getComplexityAnalysis = async (prompt: string, personality: PersonalityProfile) => {
   const ai = getAI();
   const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: `Analyze: "${prompt}". TUNING: ${personality}.
-    ${getPersonalityInstruction(personality)}`,
+    model: PRO_MODEL,
+    contents: `Analyze complexity for prompt: "${prompt}". Personality: ${personality}.`,
     config: {
       responseMimeType: "application/json",
+      thinkingConfig: { thinkingBudget: MAX_THINKING },
       responseSchema: {
         type: Type.OBJECT,
         properties: {
-          score: { type: Type.NUMBER },
-          intent: { type: Type.STRING },
+          score: { type: Type.NUMBER, description: "Complexity score 1-10" },
+          intent: { type: Type.STRING, enum: ["new", "modification", "fix"] },
           reasoning: { type: Type.STRING },
           suggestedSequence: { type: Type.ARRAY, items: { type: Type.STRING } }
         },
@@ -248,10 +81,9 @@ export const getComplexityAnalysis = async (prompt: string, personality: Persona
 export const getManagerResponse = async (prompt: string, personality: PersonalityProfile) => {
   const ai = getAI();
   const response = await ai.models.generateContent({
-    model: "gemini-3-pro-preview",
-    contents: `ROLE: Product Manager. TUNING: ${personality}.
-    Generate SRS for: "${prompt}".
-    Personality constraints: ${getPersonalityInstruction(personality)}`,
+    model: PRO_MODEL,
+    contents: `ROLE: Manager. SRS Generation for: "${prompt}". Tuning: ${getPersonalityInstruction(personality)}`,
+    config: { thinkingConfig: { thinkingBudget: MAX_THINKING } }
   });
   return response.text || "";
 };
@@ -259,71 +91,152 @@ export const getManagerResponse = async (prompt: string, personality: Personalit
 export const getPlannerResponse = async (srs: string, personality: PersonalityProfile) => {
   const ai = getAI();
   const response = await ai.models.generateContent({
-    model: "gemini-3-pro-preview",
-    contents: `Plan file structure. TUNING: ${personality}.
-    SRS: ${srs}. 
-    Architectural Style: ${getPersonalityInstruction(personality)}`,
+    model: PRO_MODEL,
+    contents: `Decompose SRS into architectural plan. SRS: ${srs}. Personality: ${personality}.`,
     config: {
       responseMimeType: "application/json",
+      thinkingConfig: { thinkingBudget: MAX_THINKING },
       responseSchema: {
         type: Type.OBJECT,
         properties: {
           features: { type: Type.ARRAY, items: { type: Type.STRING } },
           files: { type: Type.ARRAY, items: { type: Type.STRING } },
           dependencies: { type: Type.ARRAY, items: { type: Type.STRING } },
+          algorithmicPlan: { type: Type.STRING }
         },
-        required: ["features", "files", "dependencies"],
-      },
-    },
+        required: ["features", "files", "dependencies", "algorithmicPlan"]
+      }
+    }
   });
   return JSON.parse(response.text || "{}");
 };
 
-export const getDesignerResponse = async (prompt: string, features: string[], personality: PersonalityProfile) => {
+export const getDesignerResponse = async (prompt: string, features: string[], personality: PersonalityProfile): Promise<DesignSystem> => {
   const ai = getAI();
   const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: `Design theme for: "${prompt}". TUNING: ${personality}.
-    Vibe: ${personality}. 
-    ${getPersonalityInstruction(personality)}`,
+    model: PRO_MODEL,
+    contents: `Generate DesignSystem. Prompt: ${prompt}. Features: ${features.join(', ')}. Mode: ${personality}.`,
     config: {
       responseMimeType: "application/json",
+      thinkingConfig: { thinkingBudget: MAX_THINKING },
       responseSchema: {
         type: Type.OBJECT,
         properties: {
-          metadata: { type: Type.OBJECT, properties: { appName: { type: Type.STRING }, styleVibe: { type: Type.STRING } } },
-          colors: { type: Type.OBJECT, properties: { background: { type: Type.STRING }, foreground: { type: Type.STRING }, primary: { type: Type.STRING }, primaryForeground: { type: Type.STRING }, secondary: { type: Type.STRING }, accent: { type: Type.STRING }, muted: { type: Type.STRING }, border: { type: Type.STRING } } },
-          layout: { type: Type.OBJECT, properties: { radius: { type: Type.STRING }, spacing: { type: Type.STRING }, container: { type: Type.STRING } } },
-          typography: { type: Type.OBJECT, properties: { fontSans: { type: Type.STRING }, h1: { type: Type.STRING }, h2: { type: Type.STRING }, body: { type: Type.STRING } } },
+          metadata: {
+            type: Type.OBJECT,
+            properties: {
+              appName: { type: Type.STRING },
+              styleVibe: { type: Type.STRING }
+            },
+            required: ["appName", "styleVibe"]
+          },
+          colors: {
+            type: Type.OBJECT,
+            properties: {
+              background: { type: Type.STRING },
+              foreground: { type: Type.STRING },
+              primary: { type: Type.STRING },
+              primaryForeground: { type: Type.STRING },
+              secondary: { type: Type.STRING },
+              accent: { type: Type.STRING },
+              muted: { type: Type.STRING },
+              border: { type: Type.STRING }
+            },
+            required: ["background", "foreground", "primary", "primaryForeground", "secondary", "accent", "muted", "border"]
+          },
+          layout: {
+            type: Type.OBJECT,
+            properties: {
+              radius: { type: Type.STRING },
+              spacing: { type: Type.STRING },
+              container: { type: Type.STRING }
+            },
+            required: ["radius", "spacing", "container"]
+          },
+          typography: {
+            type: Type.OBJECT,
+            properties: {
+              fontSans: { type: Type.STRING },
+              h1: { type: Type.STRING },
+              h2: { type: Type.STRING },
+              body: { type: Type.STRING }
+            },
+            required: ["fontSans", "h1", "h2", "body"]
+          }
         },
-      },
-    },
+        required: ["metadata", "colors", "layout", "typography"]
+      }
+    }
   });
   return JSON.parse(response.text || "{}");
 };
 
 export const getCoderStreamResponse = async (
-  filePath: string,
+  fileName: string,
   plan: any,
   design: DesignSystem,
-  existingFiles: Record<string, string>,
+  fileSystem: Record<string, string>,
   personality: PersonalityProfile,
-  onChunk: (text: string) => void,
+  onChunk: (content: string) => void,
   isPaused: () => boolean
 ) => {
   const ai = getAI();
-  const responseStream = await ai.models.generateContentStream({
-    model: "gemini-3-pro-preview",
-    contents: `ROLE: Senior Developer. TUNING: ${personality}.
-    Implement ${filePath}. 
-    Personality constraints: ${getPersonalityInstruction(personality)}
-    WRITE ONLY FULL CODE.`,
+  const prompt = `Synthesize FILE: ${fileName}. 
+  CONTEXT: ${JSON.stringify(plan)}
+  DESIGN: ${JSON.stringify(design)}
+  VFS: ${Object.keys(fileSystem).join(', ')}
+  STYLE: ${getPersonalityInstruction(personality)}
+  
+  REQUIREMENT: Output ONLY code. No markdown code blocks.`;
+
+  const stream = await ai.models.generateContentStream({
+    model: PRO_MODEL,
+    contents: prompt,
+    config: { thinkingConfig: { thinkingBudget: MAX_THINKING } }
   });
-  let fullContent = "";
-  for await (const chunk of responseStream) {
-    while (isPaused()) await new Promise(r => setTimeout(r, 500));
+
+  let fullText = "";
+  for await (const chunk of stream) {
+    if (isPaused()) break;
     const text = (chunk as GenerateContentResponse).text;
-    if (text) { fullContent += text; onChunk(fullContent); }
+    if (text) {
+      fullText += text;
+      onChunk(fullText);
+    }
   }
-  return fullContent;
+  return fullText;
+};
+
+export const getErrorAnalysis = async (error: string, file: string, content: string, p: PersonalityProfile) => {
+  const ai = getAI();
+  const response = await ai.models.generateContent({
+    model: PRO_MODEL,
+    contents: `FAULT DETECTED: ${error}. FILE: ${file}. CONTENT: ${content.slice(0, 3000)}. MODE: ${p}. Analyze and propose repair.`,
+    config: {
+      responseMimeType: "application/json",
+      thinkingConfig: { thinkingBudget: MAX_THINKING },
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          reasoning: { type: Type.ARRAY, items: { type: Type.STRING } },
+          strategies: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                label: { type: Type.STRING },
+                description: { type: Type.STRING },
+                impact: { type: Type.STRING },
+                risk: { type: Type.STRING },
+                confidence: { type: Type.NUMBER }
+              },
+              required: ["label", "description", "impact", "risk", "confidence"]
+            }
+          }
+        },
+        required: ["reasoning", "strategies"]
+      }
+    }
+  });
+  return JSON.parse(response.text || "{}");
 };

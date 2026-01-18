@@ -3,25 +3,29 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Agentic Studio Pro</title>
+  <title>Agentic Studio Pro | Competitive Hybrid</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=Fira+Code:wght@400;500&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
   <style>
+    :root {
+      --emerald-glow: rgba(16, 185, 129, 0.2);
+      --slate-deep: #020617;
+    }
     body {
       font-family: 'Inter', sans-serif;
       margin: 0;
       overflow: hidden;
-      background-color: #020617;
+      background-color: #02040a;
       color: #f8fafc;
     }
-    .monaco-editor {
-      font-family: 'Fira Code', monospace;
+    .mono {
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
     }
     ::-webkit-scrollbar {
-      width: 6px;
-      height: 6px;
+      width: 4px;
+      height: 4px;
     }
     ::-webkit-scrollbar-track {
       background: transparent;
@@ -34,10 +38,9 @@
       background: #334155;
     }
     
-    /* Scanner Animation */
     @keyframes scan {
       0% { top: -10%; opacity: 0; }
-      50% { opacity: 0.5; }
+      50% { opacity: 0.4; }
       100% { top: 110%; opacity: 0; }
     }
     .scanner-active::after {
@@ -45,11 +48,22 @@
       position: absolute;
       left: 0;
       right: 0;
-      height: 100px;
-      background: linear-gradient(to bottom, transparent, #6366f1, transparent);
+      height: 200px;
+      background: linear-gradient(to bottom, transparent, rgba(16, 185, 129, 0.3), transparent);
       animation: scan 2s linear infinite;
       z-index: 50;
       pointer-events: none;
+    }
+    .grid-bg {
+      background-image: radial-gradient(rgba(16, 185, 129, 0.03) 1px, transparent 1px);
+      background-size: 50px 50px;
+    }
+    .scrollbar-hide::-webkit-scrollbar {
+      display: none;
+    }
+    .scrollbar-hide {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
     }
   </style>
   <script type="importmap">
@@ -67,7 +81,7 @@
 }
 </script>
 </head>
-<body>
+<body class="grid-bg">
   <div id="root"></div>
   <script type="module" src="index.tsx"></script>
 </body>

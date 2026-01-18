@@ -1,216 +1,88 @@
-
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { 
-  Cpu, Zap, Activity, ShieldCheck, HelpCircle, Loader2, Database,
-  RefreshCw, Waves, Bug, Terminal, Layers, ArrowRight, Lock, 
-  History as HistoryIcon, CircleAlert, Send, User as UserIcon, Bot,
-  ShieldAlert, Scan, Binary, Layout, ArrowDownToLine, Eye, Sparkles
+  Cpu, Zap, Activity, ShieldCheck, Loader2, Database,
+  Terminal, ArrowRight, Bot, Binary, Code2, Rocket, 
+  Microscope, Beaker, Plus, Play, CheckCircle2, XCircle,
+  TrendingUp, Dna, Gauge, FastForward, Sparkles, RefreshCcw,
+  ChevronDown, ChevronRight, Filter, Search, LayoutGrid,
+  Settings2, Eye, FileText
 } from 'lucide-react';
 import Editor from "@monaco-editor/react";
 import { 
-  ProjectState, AgentStatus, DesignSystem, User, 
-  AgentTask, AgentType, SemanticChange, MemorySummary, 
-  PersonalityProfile, NeuralError, DebugStrategy 
+  ProjectState, AgentStatus, DesignSystem, 
+  AgentTask, AgentType, PersonalityProfile, TestCase 
 } from './types';
 import { 
   getManagerResponse, getPlannerResponse, getDesignerResponse, 
-  getCoderStreamResponse, getComplexityAnalysis,
-  getErrorAnalysis, getMemoryCompressionResponse,
-  getErrorInsight, getCopilotEdit
+  getCoderStreamResponse, getComplexityAnalysis, getErrorAnalysis, getCopilotEdit
 } from './geminiService';
 
-const STORAGE_KEY = 'agentic_studio_pro_v15_final';
+const STORAGE_KEY = 'agentic_studio_pro_hybrid_v1';
 
-// --- Components ---
+// --- Sub-Components ---
 
-const PreviewDisplay: React.FC<{ fileSystem: Record<string, string>, status: AgentStatus }> = React.memo(({ fileSystem, status }) => {
-  const [srcDoc, setSrcDoc] = useState('');
-  const lastUpdateRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (status === 'ready') {
-      const appCode = fileSystem['App.tsx'] || '';
-      if (appCode === lastUpdateRef.current) return;
-      
-      const transformedCode = appCode
-        .replace(/import\s+.*\s+from\s+['"].*['"];?/g, '') 
-        .replace(/export\s+default\s+/, 'window.App = '); 
-
-      const doc = `
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-          <meta charset="UTF-8">
-          <script src="https://cdn.tailwindcss.com"></script>
-          <script type="importmap">
-          {
-            "imports": {
-              "react": "https://esm.sh/react@19.0.0",
-              "react-dom": "https://esm.sh/react-dom@19.0.0/client",
-              "lucide-react": "https://esm.sh/lucide-react@0.475.0"
-            }
-          }
-          </script>
-          <style>
-            body { margin: 0; background: #020617; color: white; font-family: sans-serif; overflow: auto; }
-            #root { min-height: 100vh; }
-          </style>
-        </head>
-        <body>
-          <div id="root"></div>
-          <script type="module">
-            import React from 'react';
-            import { createRoot } from 'react-dom';
-            
-            try {
-              ${transformedCode}
-              const root = createRoot(document.getElementById('root'));
-              const AppElement = window.App || (() => React.createElement('div', { className: 'p-10 text-center text-slate-500 font-mono text-sm' }, 'System Waiting for valid App.tsx export...'));
-              root.render(React.createElement(AppElement));
-            } catch (e) {
-              document.getElementById('root').innerHTML = '<div style="background: #111; color: #ff5555; padding: 2rem; font-family: monospace; border: 1px solid #333;"><h1 style="margin: 0 0 1rem 0;">Runtime Fault</h1><pre style="white-space: pre-wrap;">' + e.message + '\\n\\n' + e.stack + '</pre></div>';
-            }
-          </script>
-        </body>
-        </html>
-      `;
-      setSrcDoc(doc);
-      lastUpdateRef.current = appCode;
-    }
-  }, [status, fileSystem['App.tsx']]);
-
+const CollapsibleSection: React.FC<{ 
+  title: string; 
+  icon: any; 
+  children: React.ReactNode; 
+  defaultOpen?: boolean;
+}> = ({ title, icon: Icon, children, defaultOpen = true }) => {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
   return (
-    <div className="w-full h-full relative bg-[#010409] flex flex-col">
-      <div className="px-4 py-2 border-b border-slate-800 bg-slate-900/40 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Activity size={12} className={status === 'ready' ? 'text-emerald-400' : 'text-amber-400'} />
-          <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-400">Live Synthesis Preview</span>
-        </div>
+    <div className="border-b border-slate-800/50 last:border-0">
+      <button 
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center justify-between px-6 py-4 hover:bg-slate-900/40 transition-colors"
+      >
         <div className="flex items-center gap-3">
-          <span className={`text-[8px] font-bold px-2 py-0.5 rounded-full border ${status === 'ready' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'}`}>
-            {status.toUpperCase()}
-          </span>
+          <Icon size={14} className="text-slate-500" />
+          <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">{title}</span>
         </div>
-      </div>
-      <div className="flex-1 relative">
-        {status === 'busy' && (
-          <div className="absolute inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex flex-col items-center justify-center space-y-4 animate-in fade-in duration-500">
-            <Loader2 className="animate-spin text-indigo-500" size={32} />
-            <div className="text-center">
-              <h2 className="text-[10px] font-bold uppercase tracking-[0.3em] text-white">Neural Construction in Progress</h2>
-              <p className="text-[8px] text-slate-500 uppercase tracking-widest mt-1">Freezing frame...</p>
-            </div>
-          </div>
-        )}
-        <iframe title="preview-sandbox" srcDoc={srcDoc} className="w-full h-full border-none bg-slate-950" sandbox="allow-scripts allow-forms allow-modals" />
-      </div>
+        {isOpen ? <ChevronDown size={14} className="text-slate-600" /> : <ChevronRight size={14} className="text-slate-600" />}
+      </button>
+      {isOpen && <div className="px-6 pb-6 animate-in fade-in slide-in-from-top-1 duration-300">{children}</div>}
     </div>
   );
-});
+};
+
+const MetricGauge: React.FC<{ label: string; value: string; color: string; icon: any }> = ({ label, value, color, icon: Icon }) => (
+  <div className="flex items-center justify-between group">
+    <div className="flex items-center gap-2">
+      <div className={`p-1.5 rounded-lg bg-slate-900 border border-slate-800 group-hover:border-${color}/30 transition-colors`}>
+        <Icon size={12} className={`text-${color}-400 opacity-60`} />
+      </div>
+      <span className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">{label}</span>
+    </div>
+    <span className={`text-[11px] font-bold mono text-${color}-400`}>{value}</span>
+  </div>
+);
 
 export default function App() {
   const [project, setProject] = useState<ProjectState>(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) return JSON.parse(saved);
     return {
-      userPrompt: "",
-      personality: "Experimental",
-      complexity: { score: 0, intent: 'new', reasoning: "" },
-      fileSystem: { "App.tsx": "// Neural Copilot ready.\n// Highlight code and press Cmd+K to refactor.\n\nexport default function App() {\n  return <div className='p-20 text-center text-indigo-400 font-bold'>Hello Neural World</div>;\n}" },
-      semanticChanges: [],
-      neuralErrors: [],
-      designCompliance: {},
-      agentQueue: [],
-      swarmPaused: false,
-      terminalLogs: ["[SYSTEM] Neural Link established."],
-      status: "idle",
-      currentFile: "App.tsx",
-      activeTab: 'code',
-      resources: { cpu: 0, memory: 0, vfsSize: 0, processes: [] },
-      history: [],
-      selectedHistoryId: null,
-      activeReview: null,
-      activeTestSuite: null,
-      activeCleanup: null,
-      onboarding: { isActive: true, step: 0, hasSeenIntro: false },
-      memorySummaries: [],
-      immutableDirectives: ["Tailwind only.", "Modular architecture."]
+      userPrompt: "", personality: "Competitive", 
+      complexity: { score: 1, intent: 'new', reasoning: "" },
+      fileSystem: { "App.tsx": "export default function App() {\n  return <div>Neural Interface Ready</div>\n}" },
+      semanticChanges: [], neuralErrors: [], designCompliance: {}, agentQueue: [], swarmPaused: false,
+      terminalLogs: ["[KERNEL] System operational.", "[TELEMETRY] Neural load stabilized.", "[MODE] Competitive logic enabled."],
+      status: "ready", currentFile: "App.tsx", activeTab: 'code', resources: { cpu: 12, memory: 4, vfsSize: 1, processes: [] },
+      history: [], selectedHistoryId: null, activeReview: null, activeTestSuite: null, activeCleanup: null,
+      onboarding: { isActive: true, step: 0, hasSeenIntro: false }, memorySummaries: [], immutableDirectives: [], testCases: []
     };
   });
 
-  const [input, setInput] = useState(project.userPrompt);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const isExecutingRef = useRef(false);
-  
-  // Copilot State
-  const [copilotVisible, setCopilotVisible] = useState(false);
-  const [copilotInput, setCopilotInput] = useState('');
-  const [isCopilotThinking, setIsCopilotThinking] = useState(false);
+  const [input, setInput] = useState("");
   const editorRef = useRef<any>(null);
-  const monacoRef = useRef<any>(null);
+  const isExecutingRef = useRef(false);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(project));
   }, [project]);
 
-  const handleEditorDidMount = (editor: any, monaco: any) => {
-    editorRef.current = editor;
-    monacoRef.current = monaco;
-
-    // Add Cmd+K command for Copilot
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK, () => {
-      setCopilotVisible(true);
-    });
-
-    // Close on escape
-    editor.addCommand(monaco.KeyCode.Escape, () => {
-      setCopilotVisible(false);
-    });
-  };
-
-  const executeCopilot = async () => {
-    if (!copilotInput.trim() || !editorRef.current) return;
-    
-    setIsCopilotThinking(true);
-    const selection = editorRef.current.getSelection();
-    const selectedText = editorRef.current.getModel().getValueInRange(selection);
-    const fullText = editorRef.current.getValue();
-
-    try {
-      let currentResult = "";
-      await getCopilotEdit(
-        copilotInput,
-        selectedText,
-        fullText,
-        project.designSystem || ({} as DesignSystem),
-        project.personality,
-        (chunk) => {
-          currentResult = chunk;
-          // Apply streamed text to editor at selection
-          const range = selection;
-          editorRef.current.executeEdits('neural-copilot', [
-            { range: range, text: chunk, forceMoveMarkers: true }
-          ]);
-        }
-      );
-
-      setProject(p => ({
-        ...p,
-        status: 'ready',
-        terminalLogs: [...p.terminalLogs, `[COPILOT] Successfully applied: ${copilotInput}`]
-      }));
-    } catch (err) {
-      console.error("Copilot failed:", err);
-    } finally {
-      setIsCopilotThinking(false);
-      setCopilotVisible(false);
-      setCopilotInput('');
-    }
-  };
-
   const processQueue = useCallback(async () => {
     if (isExecutingRef.current || project.swarmPaused) return;
-    
     const activeTaskIndex = project.agentQueue.findIndex(t => t.status === 'active');
     if (activeTaskIndex === -1) {
       if (project.agentQueue.length > 0) {
@@ -228,48 +100,50 @@ export default function App() {
     isExecutingRef.current = true;
 
     try {
+      setProject(p => ({ ...p, terminalLogs: [...p.terminalLogs, `[AGENT] Starting task: ${task.label}`] }));
+      
       switch (task.type) {
         case 'manager':
           const analysis = await getComplexityAnalysis(project.userPrompt, project.personality);
           const srs = await getManagerResponse(project.userPrompt, project.personality);
-          const newQueue: AgentTask[] = (analysis.suggestedSequence || []).map((type: string, idx: number) => ({
-            id: `${type}-${idx}`,
+          const types = ['planner', 'designer', 'coder'];
+          const newQueue: AgentTask[] = types.map((type, idx) => ({
+            id: `${type}-${Date.now()}-${idx}`,
             type: type as AgentType,
-            label: type.charAt(0).toUpperCase() + type.slice(1),
-            priority: idx + 1,
+            label: type.toUpperCase(),
+            priority: idx,
             status: idx === 0 ? 'active' : 'pending'
           }));
-          setProject(prev => ({ ...prev, complexity: analysis, srs, agentQueue: newQueue }));
+          setProject(p => ({ ...p, complexity: analysis, srs, agentQueue: newQueue }));
           break;
-
         case 'planner':
           const plan = await getPlannerResponse(project.srs!, project.personality);
-          setProject(prev => ({ ...prev, plan, agentQueue: prev.agentQueue.filter(t => t.id !== task.id) }));
+          setProject(p => ({ ...p, plan, agentQueue: p.agentQueue.filter(t => t.id !== task.id) }));
           break;
-
         case 'designer':
           const design = await getDesignerResponse(project.userPrompt, project.plan?.features || [], project.personality);
-          setProject(prev => ({ ...prev, designSystem: design, agentQueue: prev.agentQueue.filter(t => t.id !== task.id) }));
+          setProject(p => ({ ...p, designSystem: design, agentQueue: p.agentQueue.filter(t => t.id !== task.id) }));
           break;
-
         case 'coder':
           const files = project.plan?.files || ["App.tsx"];
           for (const file of files) {
             await getCoderStreamResponse(
-              file, project.plan!, project.designSystem!, project.fileSystem, project.personality,
+              file, project.plan, project.designSystem!, project.fileSystem, project.personality,
               (content) => setProject(p => ({ ...p, fileSystem: { ...p.fileSystem, [file]: content } })),
               () => project.swarmPaused
             );
           }
-          setProject(prev => ({ ...prev, agentQueue: prev.agentQueue.filter(t => t.id !== task.id) }));
+          setProject(p => ({ ...p, agentQueue: p.agentQueue.filter(t => t.id !== task.id) }));
           break;
-
         default:
-          setProject(prev => ({ ...prev, agentQueue: prev.agentQueue.filter(t => t.id !== task.id) }));
+          setProject(p => ({ ...p, agentQueue: p.agentQueue.filter(t => t.id !== task.id) }));
       }
     } catch (err) {
-      console.error(err);
-      setProject(prev => ({ ...prev, status: 'error', agentQueue: [] }));
+      setProject(p => ({ 
+        ...p, 
+        status: 'error', 
+        terminalLogs: [...p.terminalLogs, `[ERROR] Task ${task.label} failed: ${err}`] 
+      }));
     } finally {
       isExecutingRef.current = false;
     }
@@ -279,219 +153,286 @@ export default function App() {
     if (project.status === 'busy') processQueue();
   }, [project.status, project.agentQueue, processQueue]);
 
+  const initSynthesis = () => {
+    setProject(p => ({
+      ...p,
+      userPrompt: input,
+      status: 'busy',
+      terminalLogs: [...p.terminalLogs, `[SYSTEM] Synthesis initialized for: ${input}`],
+      agentQueue: [{ id: 'init', type: 'manager', label: 'ANALYZE_INTENT', priority: 0, status: 'active' }]
+    }));
+  };
+
   return (
-    <div className="flex flex-col h-screen w-screen bg-[#020617] text-slate-100 font-sans overflow-hidden">
-      {/* HUD Header */}
-      <header className="h-14 border-b border-slate-800 flex items-center justify-between px-6 bg-slate-900/40 backdrop-blur-xl z-50">
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 bg-indigo-600/20 rounded-xl flex items-center justify-center border border-indigo-500/30 shadow-[0_0_15px_rgba(99,102,241,0.2)]">
-            <Waves className="text-indigo-400" size={20} />
+    <div className="flex flex-col h-screen w-screen bg-[#02040a] text-slate-100 overflow-hidden font-sans">
+      {/* Top Bar */}
+      <header className="h-14 border-b border-slate-800/80 flex items-center justify-between px-6 bg-slate-950/40 backdrop-blur-xl z-50">
+        <div className="flex items-center gap-5">
+          <div className="flex items-center gap-3">
+            <div className="w-7 h-7 bg-emerald-500 rounded-lg flex items-center justify-center shadow-[0_0_15px_rgba(16,185,129,0.3)]">
+              <Zap size={14} className="text-black" fill="currentColor" />
+            </div>
+            <h1 className="text-[12px] font-bold tracking-[0.25em] uppercase text-white">Agentic Studio <span className="text-emerald-500 font-black">Pro</span></h1>
           </div>
-          <div className="flex flex-col">
-            <h1 className="font-bold text-[11px] tracking-[0.3em] uppercase text-white">Agentic Studio <span className="text-indigo-400">Pro</span></h1>
+          <div className="h-4 w-px bg-slate-800 mx-2" />
+          <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
-              <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${project.status === 'ready' ? 'bg-emerald-500' : 'bg-indigo-500'}`} />
-              <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Neural Link: {project.status.toUpperCase()}</span>
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+              </span>
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">All systems nominal</span>
             </div>
           </div>
         </div>
-        
-        <div className="flex items-center gap-6">
-           <div className="flex items-center gap-4 border-r border-slate-800 pr-6">
-             {['Minimalist', 'Enterprise', 'Playful', 'Experimental'].map(p => (
-               <button 
-                key={p} 
-                onClick={() => setProject(prev => ({ ...prev, personality: p as PersonalityProfile }))}
-                className={`text-[10px] font-bold uppercase tracking-widest transition-all ${project.personality === p ? 'text-indigo-400' : 'text-slate-600 hover:text-slate-400'}`}
-               >
-                 {p}
-               </button>
-             ))}
-           </div>
-           <div className="flex items-center gap-3">
-              <div className="flex flex-col items-end">
-                <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tighter">Copilot Engaged</span>
-                <span className="text-[10px] font-bold uppercase text-indigo-400 flex items-center gap-1"><Sparkles size={10} /> Active</span>
-              </div>
-              <div className="w-px h-8 bg-slate-800" />
-              <Activity size={18} className={project.status === 'busy' ? 'text-indigo-400 animate-pulse' : 'text-slate-600'} />
-           </div>
+
+        <div className="flex items-center gap-8">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/5 border border-emerald-500/20">
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]" />
+            <span className="text-[9px] font-bold text-emerald-400 uppercase tracking-widest">Competitive logic enabled</span>
+          </div>
+          <div className="flex items-center gap-4 border-l border-slate-800 pl-8">
+             <button className="text-slate-500 hover:text-white transition-colors"><Settings2 size={16} /></button>
+             <div className="flex items-center gap-2">
+               <div className="w-7 h-7 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-[10px] font-bold">AS</div>
+             </div>
+          </div>
         </div>
       </header>
 
       <main className="flex-1 flex overflow-hidden">
-        {/* Left Control Column */}
-        <div className="w-80 flex flex-col bg-slate-950 border-r border-slate-800">
-           <div className="flex border-b border-slate-800 bg-slate-900/10">
-             {[
-               { id: 'code', label: 'Swarm', icon: Cpu },
-               { id: 'preview', label: 'Live', icon: Eye }
-             ].map(tab => (
-               <button 
-                key={tab.id}
-                onClick={() => setProject(p => ({ ...p, activeTab: tab.id as any }))} 
-                className={`flex-1 flex flex-col items-center justify-center gap-1 py-3 text-[8px] font-bold uppercase tracking-[0.2em] transition-all border-b-2 ${
-                  project.activeTab === tab.id ? 'text-indigo-400 border-indigo-500 bg-indigo-500/5' : 'text-slate-500 border-transparent hover:bg-slate-900'
-                }`}
-               >
-                 <tab.icon size={12} /> {tab.label}
-               </button>
-             ))}
-           </div>
-           
-           <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              <div className="text-[9px] font-bold text-slate-600 uppercase tracking-widest border-b border-slate-800 pb-2">Swarm Pipeline</div>
-              {project.agentQueue.map((t) => (
-                <div key={t.id} className={`p-4 rounded-2xl border transition-all duration-500 relative overflow-hidden ${
-                  t.status === 'active' ? 'bg-indigo-600/10 border-indigo-500 shadow-[0_0_20px_rgba(99,102,241,0.1)]' : 'bg-slate-900/40 border-slate-800 opacity-40'
-                }`}>
-                  <div className="flex items-center justify-between mb-3 text-[10px] font-bold uppercase tracking-wider">
-                    <span>{t.label}</span>
-                    {t.status === 'active' && <Loader2 size={12} className="animate-spin text-indigo-400" />}
-                  </div>
-                  <div className="h-1 w-full bg-slate-800 rounded-full overflow-hidden">
-                    <div className={`h-full bg-indigo-500 transition-all duration-1000 ${t.status === 'active' ? 'w-1/2 animate-pulse' : 'w-0'}`} />
-                  </div>
-                </div>
-              ))}
-              {project.agentQueue.length === 0 && (
-                <div className="flex flex-col items-center justify-center h-48 opacity-10 text-center">
-                   <Layout size={40} />
-                   <span className="text-[10px] uppercase font-bold tracking-widest mt-4">Pipeline Idle</span>
-                </div>
-              )}
-           </div>
-        </div>
-
-        {/* Dynamic Center Stage */}
-        <div className="flex-1 flex flex-col min-w-0 relative">
-          {project.activeTab === 'preview' ? (
-            <PreviewDisplay fileSystem={project.fileSystem} status={project.status} />
-          ) : (
-            <div className="flex-1 relative bg-[#010409]">
-              {/* Copilot Scanner Effect */}
-              {isCopilotThinking && <div className="scanner-active absolute inset-0 z-40 pointer-events-none" />}
-              
-              {/* Inline Copilot UI */}
-              {copilotVisible && (
-                <div className="absolute top-1/4 left-1/2 -translate-x-1/2 z-50 w-[450px] bg-slate-900/90 backdrop-blur-2xl border border-indigo-500/40 rounded-3xl shadow-2xl p-6 space-y-4 animate-in zoom-in-95 duration-200">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Sparkles className="text-indigo-400" size={16} />
-                    <span className="text-[11px] font-bold text-indigo-100 uppercase tracking-[0.2em]">Neural Copilot Directive</span>
-                  </div>
-                  <div className="relative">
-                    <input 
-                      autoFocus
-                      value={copilotInput}
-                      onChange={e => setCopilotInput(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && executeCopilot()}
-                      placeholder="e.g., 'Add a sleek modern navigation bar'"
-                      className="w-full bg-slate-950/80 border border-slate-700 rounded-2xl py-4 pl-6 pr-14 text-[13px] text-white placeholder:text-slate-600 focus:ring-1 focus:ring-indigo-500 outline-none transition-all shadow-inner"
-                    />
-                    <button 
-                      onClick={executeCopilot}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-indigo-600 rounded-xl hover:bg-indigo-500 text-white transition-all shadow-lg"
-                    >
-                      <ArrowRight size={18} />
-                    </button>
-                  </div>
-                  <div className="flex justify-between items-center text-[9px] font-bold text-slate-500 uppercase tracking-widest px-2">
-                    <span>Selection: {editorRef.current?.getSelection()?.isEmpty() ? 'Current Line' : 'Highlighted Area'}</span>
-                    <span className="flex items-center gap-1"><kbd className="bg-slate-800 px-1.5 py-0.5 rounded">ESC</kbd> to cancel</span>
-                  </div>
-                </div>
-              )}
-
-              <div className="absolute top-4 right-6 z-20 flex gap-2">
-                 <div className="px-3 py-1 bg-indigo-600/10 backdrop-blur-md border border-indigo-500/20 rounded-full text-[9px] font-bold text-indigo-400 uppercase tracking-widest flex items-center gap-2">
-                    <Binary size={10} /> Copilot Shortcut: Cmd+K
-                 </div>
+        {/* Left Panel: Neural Pipeline */}
+        <aside className="w-[24rem] flex flex-col bg-slate-950/20 border-r border-slate-800/80 overflow-y-auto scrollbar-hide">
+          <CollapsibleSection title="Neural Metrics" icon={Activity}>
+            <div className="space-y-4 pt-2">
+              <MetricGauge label="Neural Load" value="14.2%" color="emerald" icon={Cpu} />
+              <MetricGauge label="Clock Speed" value="5.2 GHz" color="blue" icon={Gauge} />
+              <MetricGauge label="Context SAT" value="48.1k" color="amber" icon={Database} />
+              <div className="h-1 w-full bg-slate-900 rounded-full mt-2 overflow-hidden">
+                <div className="h-full bg-emerald-500/60 w-[42%]" />
               </div>
-              
+            </div>
+          </CollapsibleSection>
+
+          <CollapsibleSection title="Swarm Vector" icon={Bot}>
+            <div className="space-y-3 pt-2">
+              {project.agentQueue.length > 0 ? project.agentQueue.map((task) => (
+                <div key={task.id} className={`p-4 rounded-xl border transition-all ${
+                  task.status === 'active' 
+                    ? 'bg-emerald-600/5 border-emerald-500/30 shadow-[0_0_20px_rgba(16,185,129,0.05)]' 
+                    : 'bg-slate-900/40 border-slate-800/40 opacity-40'
+                }`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[10px] font-bold uppercase tracking-widest flex items-center gap-2">
+                      <div className={`w-1 h-1 rounded-full ${task.status === 'active' ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
+                      {task.label}
+                    </span>
+                    {task.status === 'active' && <Loader2 size={12} className="animate-spin text-emerald-400" />}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {[1, 2, 3, 4, 5].map(i => (
+                      <div key={i} className={`h-1 flex-1 rounded-full ${task.status === 'active' ? (i <= 3 ? 'bg-emerald-500/50' : 'bg-slate-800') : 'bg-slate-800'}`} />
+                    ))}
+                  </div>
+                </div>
+              )) : (
+                <div className="py-12 flex flex-col items-center justify-center border-2 border-dashed border-slate-800/40 rounded-2xl opacity-20 space-y-3">
+                  <ShieldCheck size={32} strokeWidth={1} />
+                  <span className="text-[9px] font-bold uppercase tracking-[0.2em]">Queue Neutral</span>
+                </div>
+              )}
+            </div>
+          </CollapsibleSection>
+
+          <CollapsibleSection title="Neural Directives" icon={ShieldCheck} defaultOpen={false}>
+            <div className="space-y-4 pt-2">
+              <div className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-xl">
+                <p className="text-[10px] text-emerald-300/60 leading-relaxed font-mono italic">
+                  "Logical coherence must be preserved at O(N) complexity thresholds. Synthesis is deterministic."
+                </p>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-[10px] text-slate-500">
+                  <CheckCircle2 size={12} className="text-emerald-500" />
+                  <span>Strict Type Validation</span>
+                </div>
+                <div className="flex items-center gap-2 text-[10px] text-slate-500">
+                  <CheckCircle2 size={12} className="text-emerald-500" />
+                  <span>Design Compliance v3.0</span>
+                </div>
+              </div>
+            </div>
+          </CollapsibleSection>
+        </aside>
+
+        {/* Center Panel: Code Surface */}
+        <section className="flex-1 flex flex-col bg-slate-950/40">
+          <div className="h-12 border-b border-slate-800/80 flex items-center px-6 justify-between bg-slate-900/20">
+            <div className="flex items-center gap-8">
+              {[
+                { id: 'code', icon: Code2, label: 'Code' },
+                { id: 'preview', icon: Eye, label: 'Preview' },
+                { id: 'tests', icon: Microscope, label: 'Tests' }
+              ].map(tab => (
+                <button 
+                  key={tab.id}
+                  onClick={() => setProject(p => ({ ...p, activeTab: tab.id as any }))}
+                  className={`flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] transition-all border-b-2 py-3.5 ${
+                    project.activeTab === tab.id 
+                      ? 'text-emerald-400 border-emerald-500 shadow-[0_4px_10px_-4px_rgba(16,185,129,0.3)]' 
+                      : 'text-slate-500 border-transparent hover:text-slate-300'
+                  }`}
+                >
+                  <tab.icon size={13} />
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-[9px] font-bold text-slate-600 uppercase tracking-widest">Synthesis Mode</span>
+              <div className="flex items-center gap-1.5 bg-slate-900 px-2 py-1 rounded-md border border-slate-800">
+                <div className="w-1 h-1 rounded-full bg-blue-400" />
+                <span className="text-[9px] font-bold text-slate-400 uppercase">React 19</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex-1 relative overflow-hidden">
+            {project.status === 'busy' && (
+              <div className="absolute inset-0 bg-emerald-500/[0.02] pointer-events-none z-10 scanner-active" />
+            )}
+            
+            {project.activeTab === 'code' ? (
               <Editor 
                 height="100%" 
                 language="typescript" 
                 theme="vs-dark" 
-                onMount={handleEditorDidMount}
+                value={project.currentFile ? project.fileSystem[project.currentFile] : ""}
                 options={{
-                  fontSize: 13,
-                  fontFamily: "'Fira Code', monospace",
+                  fontSize: 14,
+                  fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
                   minimap: { enabled: false },
-                  lineNumbersMinChars: 3,
-                  padding: { top: 20 },
-                  smoothScrolling: true,
+                  scrollBeyondLastLine: false,
+                  padding: { top: 24, bottom: 24 },
+                  lineHeight: 1.6,
                   cursorBlinking: "smooth",
-                  cursorSmoothCaretAnimation: "on"
-                }}
-                value={project.currentFile ? project.fileSystem[project.currentFile] : ``} 
-                onChange={(val) => {
-                  if (project.currentFile && val) {
-                    setProject(p => ({ ...p, fileSystem: { ...p.fileSystem, [project.currentFile!]: val } }));
-                  }
+                  cursorSmoothCaretAnimation: "on",
+                  roundedSelection: true,
+                  automaticLayout: true
                 }}
               />
+            ) : (
+              <div className="w-full h-full flex flex-col items-center justify-center p-12 text-center space-y-6">
+                <div className="w-20 h-20 rounded-3xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-700">
+                  <LayoutGrid size={40} strokeWidth={1} />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-sm font-bold uppercase tracking-widest">Surface Initializing</h3>
+                  <p className="text-[11px] text-slate-500 max-w-xs mx-auto leading-relaxed">
+                    The {project.activeTab} environment is waiting for logic synthesis to complete.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="p-6 bg-slate-950/60 border-t border-slate-800/80">
+            <div className="flex items-center gap-4 bg-slate-900/50 border border-slate-800/80 rounded-[20px] p-2 pr-4 shadow-xl">
+               <textarea 
+                value={input} 
+                onChange={e => setInput(e.target.value)}
+                placeholder="Describe your intent or algorithmic challenge..." 
+                className="flex-1 bg-transparent border-none p-3 text-[12px] text-slate-300 resize-none outline-none font-mono min-h-[50px] scrollbar-hide"
+              />
+              <button 
+                onClick={initSynthesis}
+                disabled={project.status === 'busy' || !input.trim()}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-900/20 transition-all active:scale-90 disabled:opacity-20"
+              >
+                <FastForward size={20} fill="currentColor" />
+              </button>
             </div>
-          )}
-        </div>
+          </div>
+        </section>
 
-        {/* Right Asset/Terminal Column */}
-        <div className="w-80 flex flex-col bg-slate-950 border-l border-slate-800">
-           <div className="p-4 flex-1 space-y-6 overflow-y-auto font-mono text-[10px]">
-              <section className="space-y-3">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                  <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2"><ArrowDownToLine size={12} /> Registry</span>
-                  <RefreshCw size={10} className="hover:text-indigo-400 cursor-pointer transition-all" onClick={() => window.location.reload()} />
-                </div>
-                {Object.keys(project.fileSystem).map(f => (
-                  <button 
-                    key={f} 
-                    onClick={() => setProject(p => ({ ...p, currentFile: f }))} 
-                    className={`w-full text-left p-2.5 rounded-xl transition-all border ${
-                      project.currentFile === f ? 'text-indigo-400 bg-indigo-500/5 border-indigo-500/20' : 'text-slate-500 border-transparent'
-                    }`}
-                  >
-                    <span className="truncate flex items-center gap-2">
-                       <span className={`w-1.5 h-1.5 rounded-full ${project.currentFile === f ? 'bg-indigo-400 shadow-[0_0_8px_rgba(99,102,241,0.5)]' : 'bg-slate-700'}`} />
-                       {f}
-                    </span>
-                  </button>
-                ))}
-              </section>
+        {/* Right Panel: Neural Logs */}
+        <aside className="w-[22rem] flex flex-col bg-slate-950/20 border-l border-slate-800/80">
+          <CollapsibleSection title="Neural Logs" icon={Terminal}>
+            <div className="h-[calc(100vh-400px)] flex flex-col pt-2">
+              <div className="flex-1 overflow-y-auto space-y-3 pr-2 scrollbar-hide font-mono text-[10px] leading-relaxed">
+                {project.terminalLogs.map((log, i) => {
+                  const tag = log.match(/\[(.*?)\]/)?.[1] || "INFO";
+                  const tagColor = {
+                    KERNEL: "text-blue-400",
+                    TELEMETRY: "text-emerald-400",
+                    MODE: "text-amber-400",
+                    AGENT: "text-purple-400",
+                    ERROR: "text-red-400",
+                    SYSTEM: "text-slate-300"
+                  }[tag] || "text-slate-500";
 
-              <section className="space-y-3">
-                <div className="text-[9px] font-bold text-slate-500 uppercase tracking-widest border-b border-slate-800 pb-2">Neural Stream</div>
-                <div className="space-y-1 opacity-60">
-                  {project.terminalLogs.slice(-10).map((log, i) => (
-                    <div key={i} className="text-slate-400 truncate tracking-tight">{log}</div>
-                  ))}
-                </div>
-              </section>
-           </div>
-           
-           <div className="p-5 border-t border-slate-800 bg-slate-900/20">
-            <textarea 
-              value={input} 
-              onChange={e => setInput(e.target.value)} 
-              placeholder="Inject core architectural directive..." 
-              className="w-full h-24 bg-slate-950 border border-slate-800 rounded-2xl p-4 text-[11px] text-slate-300 resize-none outline-none focus:ring-1 focus:ring-indigo-500 transition-all placeholder:text-slate-700 font-mono" 
-            />
-            <button 
-              onClick={() => {
-                setProject(p => ({ 
-                  ...p, 
-                  userPrompt: input, 
-                  status: 'busy', 
-                  agentQueue: [{ id: `init-${Date.now()}`, type: 'manager', label: 'Processing Intent', priority: 1, status: 'active' }] 
-                }));
-              }} 
-              disabled={project.status === 'busy' || !input.trim()}
-              className="mt-3 w-full bg-indigo-600 hover:bg-indigo-500 text-white py-3.5 rounded-2xl text-[10px] font-bold flex items-center justify-center gap-3 uppercase tracking-[0.3em] shadow-xl shadow-indigo-900/20 active:scale-[0.98] transition-all disabled:opacity-30"
-            >
-              <Zap size={14} fill="currentColor" /> Synthesis
-            </button>
+                  return (
+                    <div key={i} className="flex gap-2 group">
+                      <span className={`${tagColor} font-bold opacity-60`}>[{tag}]</span>
+                      <span className="text-slate-400 group-hover:text-slate-200 transition-colors">{log.replace(/\[.*?\]/, '').trim()}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="flex items-center gap-4 pt-4 mt-4 border-t border-slate-800/50">
+                <button className="text-[9px] font-bold text-slate-600 uppercase tracking-widest hover:text-slate-400 transition-colors">Clear Logs</button>
+                <div className="flex-1" />
+                <Filter size={12} className="text-slate-600" />
+              </div>
+            </div>
+          </CollapsibleSection>
+
+          <CollapsibleSection title="Virtual File System" icon={Database}>
+            <div className="space-y-2 pt-2">
+              {Object.keys(project.fileSystem).map(f => (
+                <button 
+                  key={f} 
+                  onClick={() => setProject(p => ({ ...p, currentFile: f }))}
+                  className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all ${
+                    project.currentFile === f 
+                      ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-400' 
+                      : 'bg-slate-900/30 border-slate-800/50 text-slate-500 hover:border-slate-700'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 text-[11px] font-medium">
+                    <FileText size={14} className={project.currentFile === f ? 'text-emerald-400' : 'text-slate-600'} />
+                    {f}
+                  </div>
+                  {project.currentFile === f && <div className="w-1 h-1 rounded-full bg-emerald-400 shadow-[0_0_8px_#10b981]" />}
+                </button>
+              ))}
+              <button className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-dashed border-slate-800/50 text-slate-700 hover:border-slate-600 hover:text-slate-500 transition-all">
+                <Plus size={14} />
+                <span className="text-[11px] font-bold uppercase tracking-widest">Inject Vector</span>
+              </button>
+            </div>
+          </CollapsibleSection>
+        </aside>
+      </main>
+
+      {/* Logic Ribbon */}
+      <footer className="h-8 border-t border-slate-800/80 bg-slate-950 flex items-center justify-between px-6 text-[9px] font-bold uppercase tracking-[0.2em] text-slate-600">
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-blue-500/50" />
+            <span>VFS Snapshot: 1.2 MB</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500/50" />
+            <span>Neural Coherence: 0.98</span>
           </div>
         </div>
-      </main>
+        <div className="flex items-center gap-4">
+          <span>Engine: <span className="text-slate-400 font-black tracking-normal">Gemini 3 Pro</span></span>
+          <div className="h-3 w-px bg-slate-800" />
+          <span>Epoch: <span className="text-slate-400">1.4.2</span></span>
+        </div>
+      </footer>
     </div>
   );
 }

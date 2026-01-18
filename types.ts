@@ -3,12 +3,12 @@ export interface User {
   username: string;
 }
 
-export type PersonalityProfile = "Minimalist" | "Enterprise" | "Playful" | "Experimental";
+export type PersonalityProfile = "Minimalist" | "Enterprise" | "Playful" | "Experimental" | "Competitive";
 
 export interface DesignSystem {
   metadata: {
     appName: string;
-    styleVibe: "Modern" | "Corporate" | "Playful" | "Brutalist" | "Minimalist";
+    styleVibe: "Modern" | "Corporate" | "Playful" | "Brutalist" | "Minimalist" | "Competitive";
   };
   colors: {
     background: string;
@@ -34,6 +34,14 @@ export interface DesignSystem {
 }
 
 export type AgentType = "manager" | "planner" | "designer" | "architect" | "coder" | "reviewer" | "compiler" | "patcher" | "tester" | "cleanup" | "compressor" | "validator" | "aligner" | "debugger";
+
+export interface TestCase {
+  id: string;
+  input: string;
+  expectedOutput: string;
+  actualOutput?: string;
+  status: 'pending' | 'passed' | 'failed' | 'running';
+}
 
 export interface DebugStrategy {
   label: string;
@@ -132,6 +140,7 @@ export interface ProjectState {
     features: string[];
     files: string[];
     dependencies: string[];
+    algorithmicPlan?: string;
   };
   designSystem?: DesignSystem;
   fileSystem: Record<string, string>;
@@ -144,7 +153,7 @@ export interface ProjectState {
   memorySummaries: MemorySummary[];
   status: AgentStatus;
   currentFile: string | null;
-  activeTab: 'code' | 'sandbox' | 'memory' | 'validator' | 'preview';
+  activeTab: 'code' | 'sandbox' | 'memory' | 'validator' | 'preview' | 'tests';
   resources: ResourceMetrics;
   history: HistorySnapshot[];
   selectedHistoryId: string | null;
@@ -153,6 +162,7 @@ export interface ProjectState {
   activeCleanup: CleanupReport | null;
   onboarding: OnboardingState;
   immutableDirectives: string[];
+  testCases: TestCase[];
 }
 
 export interface ReviewReport {
