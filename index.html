@@ -7,7 +7,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=Fira+Code:wght@400;500&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Fira+Code:wght@400;500&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
   <style>
     :root {
       --emerald-glow: rgba(16, 185, 129, 0.2);
@@ -50,13 +50,26 @@
       right: 0;
       height: 200px;
       background: linear-gradient(to bottom, transparent, rgba(16, 185, 129, 0.3), transparent);
-      animation: scan 2s linear infinite;
+      animation: scan 2.5s linear infinite;
       z-index: 50;
       pointer-events: none;
     }
+
+    @keyframes pulse-highlight {
+      0% { background-color: rgba(16, 185, 129, 0.1); }
+      50% { background-color: rgba(16, 185, 129, 0.25); }
+      100% { background-color: rgba(16, 185, 129, 0.1); }
+    }
+    .highlight-active {
+      animation: pulse-highlight 1.5s ease-in-out infinite;
+    }
+
     .grid-bg {
-      background-image: radial-gradient(rgba(16, 185, 129, 0.03) 1px, transparent 1px);
-      background-size: 50px 50px;
+      background-image: 
+        radial-gradient(rgba(16, 185, 129, 0.03) 1.5px, transparent 1.5px),
+        linear-gradient(to right, rgba(16, 185, 129, 0.01) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(16, 185, 129, 0.01) 1px, transparent 1px);
+      background-size: 50px 50px, 100px 100px, 100px 100px;
     }
     .scrollbar-hide::-webkit-scrollbar {
       display: none;
@@ -64,6 +77,15 @@
     .scrollbar-hide {
       -ms-overflow-style: none;
       scrollbar-width: none;
+    }
+    
+    /* Animation Utilities */
+    .animate-in {
+      animation: fadeIn 0.4s ease-out forwards;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
     }
   </style>
   <script type="importmap">

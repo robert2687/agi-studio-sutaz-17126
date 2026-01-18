@@ -1,5 +1,7 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+
+import React, { Component } from 'react';
 import { AlertOctagon, RotateCcw, RefreshCw } from 'lucide-react';
+import type { ErrorInfo, ReactNode } from 'react';
 
 interface Props {
   children?: ReactNode;
@@ -13,23 +15,25 @@ interface State {
 
 /**
  * ErrorBoundary: Catches rendering errors and provides recovery options.
+ * Using Component<Props, State> ensure the compiler correctly resolves 'state', 'setState', and 'props'.
  */
-// Fix: Extending Component directly with generics ensures 'state', 'setState', and 'props' are correctly typed and inherited.
 export class ErrorBoundary extends Component<Props, State> {
+  // Explicitly initialize state as a class property to ensure it's recognized by the TypeScript compiler
+  public state: State = {
+    hasError: false,
+    error: null,
+    errorInfo: null,
+  };
+
   constructor(props: Props) {
     super(props);
-    this.state = {
-      hasError: false,
-      error: null,
-      errorInfo: null,
-    };
   }
 
   public static getDerivedStateFromError(error: any): State {
     return { hasError: true, error, errorInfo: null };
   }
 
-  // Fix: Accessing setState from the base Component class.
+  // Handle side effects on error and update state using this.setState inherited from Component
   public componentDidCatch(error: any, errorInfo: ErrorInfo) {
     console.error("ErrorBoundary caught an error", error, errorInfo);
     this.setState({ errorInfo });
@@ -46,7 +50,7 @@ export class ErrorBoundary extends Component<Props, State> {
   };
 
   public render() {
-    // Fix: Accessing state inherited from Component.
+    // Access this.state from the base Component class to check for captured errors
     if (this.state.hasError) {
       return (
         <div className="flex flex-col items-center justify-center min-h-screen bg-[#020617] p-6 text-slate-200 font-sans">
@@ -69,6 +73,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 <span className="text-[10px] font-mono text-red-400/50 bg-red-400/5 px-2 py-0.5 rounded uppercase">CRITICAL_FAULT</span>
               </div>
               <div className="bg-black/40 border border-slate-800 rounded-2xl p-6 font-mono text-[11px] leading-relaxed text-slate-300 overflow-auto max-h-48 scrollbar-hide">
+                {/* Access state.error properly from the instance context */}
                 {String(this.state.error?.stack || this.state.error || "Unknown system fault.")}
               </div>
             </div>
@@ -94,7 +99,7 @@ export class ErrorBoundary extends Component<Props, State> {
         </div>
       );
     }
-    // Fix: props.children is now correctly accessible on the typed class instance.
+    // Correctly return this.props.children from the inherited Component class
     return this.props.children;
   }
 }
