@@ -121,12 +121,14 @@ export interface AgentTask {
   contextOverride?: string;
 }
 
-export type AgentStatus = "idle" | "busy" | "ready" | "error";
+export type AgentStatus = "idle" | "busy" | "ready" | "error" | "patching";
 
 export interface ResourceMetrics {
   cpu: number;
   memory: number;
   vfsSize: number;
+  vfsHealth: number;
+  entropy: number;
   processes: string[];
 }
 

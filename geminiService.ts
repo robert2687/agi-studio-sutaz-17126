@@ -1,10 +1,11 @@
 
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
-import { DesignSystem, SemanticChange, PersonalityProfile, MemorySummary, ErrorChatMessage } from "./types";
+import { DesignSystem, SemanticChange, PersonalityProfile, MemorySummary, ErrorChatMessage, NeuralError } from "./types";
 
 const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const PRO_MODEL = 'gemini-3-pro-preview';
+const FLASH_MODEL = 'gemini-3-flash-preview';
 const MAX_THINKING = 32768;
 
 const getPersonalityInstruction = (p: PersonalityProfile) => {
@@ -19,6 +20,63 @@ const getPersonalityInstruction = (p: PersonalityProfile) => {
     WORKFLOW: Analyze -> Plan -> Execute -> Formal Verification.`;
     default: return "";
   }
+};
+
+export const getPatcherResponse = async (
+  error: NeuralError,
+  fileContent: string,
+  design: DesignSystem,
+  personality: PersonalityProfile
+): Promise<string> => {
+  const ai = getAI();
+  const prompt = `ROLE: Neural Patcher. 
+  TASK: Perform a self-healing operation on the provided file content.
+  FAULT: ${error.message}
+  FILE: ${error.file}
+  CONTENT: ${fileContent}
+  DESIGN_SYSTEM: ${JSON.stringify(design)}
+  STYLE: ${getPersonalityInstruction(personality)}
+  
+  OBJECTIVE: Resolve the fault while maintaining strict design compliance and architectural integrity.
+  Respond ONLY with the corrected code. No markdown.`;
+
+  const response = await ai.models.generateContent({
+    model: PRO_MODEL,
+    contents: prompt,
+    config: { thinkingConfig: { thinkingBudget: 8000 } }
+  });
+  return response.text || fileContent;
+};
+
+export const validateSynthesis = async (
+  fileSystem: Record<string, string>,
+  plan: any
+): Promise<{ valid: boolean; errors: string[] }> => {
+  const ai = getAI();
+  const response = await ai.models.generateContent({
+    model: FLASH_MODEL,
+    contents: `ROLE: Formal Validator. 
+    TASK: Verify structural integrity and plan alignment for the virtual file system.
+    FILES: ${Object.keys(fileSystem).join(', ')}
+    PLAN: ${JSON.stringify(plan)}
+    
+    Check for:
+    1. Missing exports/imports.
+    2. Plan deviations.
+    3. Structural collisions.`,
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          valid: { type: Type.BOOLEAN },
+          errors: { type: Type.ARRAY, items: { type: Type.STRING } }
+        },
+        required: ["valid", "errors"]
+      }
+    }
+  });
+  return JSON.parse(response.text || '{"valid": true, "errors": []}');
 };
 
 export const compressMemory = async (
@@ -68,10 +126,6 @@ export const compressMemory = async (
   return JSON.parse(response.text || "{}");
 };
 
-/**
- * Rehydrates a specific memory epoch into a set of "Restoration Directives" 
- * that will guide the swarm in its next task.
- */
 export const rehydrateFocus = async (
   summary: MemorySummary,
   personality: PersonalityProfile
@@ -250,7 +304,7 @@ export const getCoderStreamResponse = async (
   personality: PersonalityProfile,
   onChunk: (content: string) => void,
   isPaused: () => boolean,
-  contextOverride?: string // New parameter for rehydration
+  contextOverride?: string
 ) => {
   const ai = getAI();
   const prompt = `Synthesize FILE: ${fileName}. 

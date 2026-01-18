@@ -1,7 +1,10 @@
+
 import React, { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import { ErrorBoundary } from './ErrorBoundary';
+import { ThemeProvider } from './ThemeContext';
+import { LayoutProvider } from './LayoutContext';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -12,7 +15,11 @@ const root = createRoot(rootElement);
 root.render(
   <StrictMode>
     <ErrorBoundary>
-      <App />
+      <ThemeProvider>
+        <LayoutProvider>
+          <App />
+        </LayoutProvider>
+      </ThemeProvider>
     </ErrorBoundary>
   </StrictMode>
 );

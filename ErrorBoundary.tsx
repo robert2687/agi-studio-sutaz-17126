@@ -15,11 +15,11 @@ interface State {
 /**
  * ErrorBoundary: Catches rendering errors and provides recovery options.
  */
-// Fix: Using named imports and ensuring ErrorBoundary properly extends Component<Props, State>
+// Fix: Use Component from named import to properly extend the React base class and ensure this.state/this.props are available
 export class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
-    // Fix: Correctly initialize inherited state in constructor
+    // Properly initialize state in constructor
     this.state = {
       hasError: false,
       error: null,
@@ -31,7 +31,6 @@ export class ErrorBoundary extends Component<Props, State> {
     return { hasError: true, error, errorInfo: null };
   }
 
-  // Fix: Correctly use inherited setState from Component base class
   public componentDidCatch(error: any, errorInfo: ErrorInfo) {
     console.error("ErrorBoundary caught an error", error, errorInfo);
     this.setState({ errorInfo });
@@ -47,7 +46,6 @@ export class ErrorBoundary extends Component<Props, State> {
     window.location.reload();
   };
 
-  // Fix: Access this.state and this.props correctly within the render method via inheritance
   public render() {
     if (this.state.hasError) {
       return (
