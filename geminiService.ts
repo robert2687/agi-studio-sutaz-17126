@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
 import { DesignSystem, SemanticChange, PersonalityProfile, MemorySummary, ErrorChatMessage } from "./types";
 
@@ -18,6 +19,76 @@ const getPersonalityInstruction = (p: PersonalityProfile) => {
     WORKFLOW: Analyze -> Plan -> Execute -> Formal Verification.`;
     default: return "";
   }
+};
+
+export const compressMemory = async (
+  logs: string[],
+  plan: any,
+  directives: string[],
+  unresolvedIssues: string[],
+  personality: PersonalityProfile
+): Promise<MemorySummary> => {
+  const ai = getAI();
+  const response = await ai.models.generateContent({
+    model: PRO_MODEL,
+    contents: `ROLE: Neural Memory Architect. 
+    TASK: Perform a high-density lossy compression of the current SharedContext while preserving Architectural DNA.
+    
+    LOGS (Last 50): ${logs.slice(-50).join('\n')}
+    ARCHITECTURAL_PLAN: ${JSON.stringify(plan)}
+    IMMUTABLE_DIRECTIVES: ${directives.join(', ')}
+    UNRESOLVED_ISSUES: ${unresolvedIssues.join(', ')}
+    PERSONALITY: ${personality}
+    
+    COMPRESSION PROTOCOL:
+    1. NEVER compress Immutable Directives. They are Swarm DNA.
+    2. Identify 'Structural Anchors' (the 3-5 most critical files or logic blocks).
+    3. Summarize key learnings/decisions that led to the current state.
+    4. Provide a high-level 'Architectural Status' string (max 200 chars).
+    5. Calculate an Estimated Compression Ratio (e.g. "8.4x").`,
+    config: {
+      responseMimeType: "application/json",
+      thinkingConfig: { thinkingBudget: MAX_THINKING },
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          epoch: { type: Type.NUMBER },
+          timestamp: { type: Type.NUMBER },
+          immutableDirectives: { type: Type.ARRAY, items: { type: Type.STRING } },
+          architecturalStatus: { type: Type.STRING },
+          unresolvedIssues: { type: Type.ARRAY, items: { type: Type.STRING } },
+          compressionRatio: { type: Type.STRING },
+          keyLearnings: { type: Type.ARRAY, items: { type: Type.STRING } },
+          structuralAnchors: { type: Type.ARRAY, items: { type: Type.STRING } }
+        },
+        required: ["epoch", "timestamp", "immutableDirectives", "architecturalStatus", "unresolvedIssues", "compressionRatio", "keyLearnings", "structuralAnchors"]
+      }
+    }
+  });
+  return JSON.parse(response.text || "{}");
+};
+
+/**
+ * Rehydrates a specific memory epoch into a set of "Restoration Directives" 
+ * that will guide the swarm in its next task.
+ */
+export const rehydrateFocus = async (
+  summary: MemorySummary,
+  personality: PersonalityProfile
+): Promise<string> => {
+  const ai = getAI();
+  const response = await ai.models.generateContent({
+    model: PRO_MODEL,
+    contents: `ROLE: Context Aligner. 
+    TASK: Convert a Memory Epoch Summary into a set of 'Focus Directives' for a coding agent.
+    SUMMARY: ${JSON.stringify(summary)}
+    PERSONALITY: ${personality}
+    
+    OBJECTIVE: Remind the agent of the architectural intent and design constraints captured in this epoch. 
+    Be authoritative and precise. Ensure they don't drift from the primary mission.`,
+    config: { thinkingConfig: { thinkingBudget: 8000 } }
+  });
+  return response.text || "Maintain architectural alignment with defined intent.";
 };
 
 export const getCopilotEdit = async (
@@ -178,11 +249,13 @@ export const getCoderStreamResponse = async (
   fileSystem: Record<string, string>,
   personality: PersonalityProfile,
   onChunk: (content: string) => void,
-  isPaused: () => boolean
+  isPaused: () => boolean,
+  contextOverride?: string // New parameter for rehydration
 ) => {
   const ai = getAI();
   const prompt = `Synthesize FILE: ${fileName}. 
-  CONTEXT: ${JSON.stringify(plan)}
+  CONTEXT_OVERRIDE: ${contextOverride || "None."}
+  PLAN: ${JSON.stringify(plan)}
   DESIGN: ${JSON.stringify(design)}
   VFS: ${Object.keys(fileSystem).join(', ')}
   STYLE: ${getPersonalityInstruction(personality)}

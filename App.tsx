@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Cpu, Zap, ShieldCheck, Loader2, 
@@ -5,17 +6,17 @@ import {
   CheckCircle2, FastForward, 
   ChevronDown, Settings2, Eye, FileText,
   Rocket, Layers, BrainCircuit, Maximize2, Minimize2,
-  LayoutGrid
+  LayoutGrid, Database, Activity, History, Trash2, ArrowDownCircle, RefreshCw, Anchor
 } from 'lucide-react';
 import { 
-  ProjectState, AgentTask, AgentType
+  ProjectState, AgentTask, AgentType, MemorySummary
 } from './types';
 import { 
   getManagerResponse, getPlannerResponse, getDesignerResponse, 
-  getCoderStreamResponse, getComplexityAnalysis
+  getCoderStreamResponse, getComplexityAnalysis, compressMemory, rehydrateFocus
 } from './geminiService';
 
-const STORAGE_KEY = 'agentic_studio_pro_v3';
+const STORAGE_KEY = 'agentic_studio_pro_v4';
 
 // --- UI Components ---
 
@@ -82,7 +83,11 @@ export default function App() {
       terminalLogs: ["[KERNEL] System operational.", "[TELEMETRY] Neural load stabilized.", "[MODE] Competitive logic enabled."],
       status: "ready", currentFile: "App.tsx", activeTab: 'code', resources: { cpu: 14.2, memory: 4.8, vfsSize: 1.2, processes: [] },
       history: [], selectedHistoryId: null, activeReview: null, activeTestSuite: null, activeCleanup: null,
-      onboarding: { isActive: true, step: 0, hasSeenIntro: false }, memorySummaries: [], immutableDirectives: [], testCases: []
+      onboarding: { isActive: true, step: 0, hasSeenIntro: false }, 
+      memorySummaries: [], 
+      activeMemoryEpoch: null,
+      immutableDirectives: ["Must be browser-native", "O(N log N) algorithmic complexity", "Tailwind CSS only", "Strict TypeScript usage"], 
+      testCases: []
     };
   });
 
@@ -90,21 +95,96 @@ export default function App() {
   const [isLeftCollapsed, setIsLeftCollapsed] = useState(false);
   const [isRightCollapsed, setIsRightCollapsed] = useState(false);
   const [highlightedLogIndex, setHighlightedLogIndex] = useState<number | null>(null);
+  const [isCompressing, setIsCompressing] = useState(false);
+  const [isRehydrating, setIsRehydrating] = useState<number | null>(null);
   const isExecutingRef = useRef(false);
 
-  // --- REQUESTED LOCAL TAB STATE ---
-  const [activeTab, setActiveTab] = useState<"code" | "preview" | "tests">("code");
+  // --- LOCAL TAB STATE ---
+  const [activeTab, setActiveTab] = useState<"code" | "preview" | "tests" | "memory">("code");
 
-  // --- REQUESTED RENDER LOGIC ---
+  const runCompression = async () => {
+    if (isCompressing) return;
+    setIsCompressing(true);
+    try {
+      setProject(p => ({ ...p, terminalLogs: [...p.terminalLogs, "[MEM_ARCH] Initiating high-density compression..."] }));
+      const summary = await compressMemory(
+        project.terminalLogs, 
+        project.plan, 
+        project.immutableDirectives, 
+        project.neuralErrors.map(e => e.message), 
+        project.personality
+      );
+      setProject(p => ({
+        ...p,
+        memorySummaries: [...p.memorySummaries, { ...summary, epoch: p.memorySummaries.length + 1 }],
+        terminalLogs: [...p.terminalLogs, `[MEM_ARCH] Compression Complete. Ratio: ${summary.compressionRatio}.`]
+      }));
+    } catch (e) {
+      console.error(e);
+      setProject(p => ({ ...p, terminalLogs: [...p.terminalLogs, "[FAULT] Memory compression module failure."] }));
+    } finally {
+      setIsCompressing(false);
+    }
+  };
+
+  const handleRehydration = async (summary: MemorySummary) => {
+    setIsRehydrating(summary.epoch);
+    try {
+      setProject(p => ({ ...p, terminalLogs: [...p.terminalLogs, `[SYNC] Rehydrating focus from Epoch ${summary.epoch}...`] }));
+      const restorationDirectives = await rehydrateFocus(summary, project.personality);
+      
+      setProject(p => ({
+        ...p,
+        activeMemoryEpoch: summary.epoch,
+        terminalLogs: [...p.terminalLogs, `[SYNC] Focus restored. Neural alignment synchronized.`],
+        // Inject restoration focus into the next task in queue
+        agentQueue: p.agentQueue.map((task, i) => 
+          i === 0 ? { ...task, contextOverride: restorationDirectives } : task
+        )
+      }));
+      
+      // Flash a synchronization UI effect
+      const overlay = document.createElement('div');
+      overlay.className = 'fixed inset-0 bg-blue-500/10 backdrop-blur-sm z-[9999] pointer-events-none animate-in fade-in duration-500';
+      document.body.appendChild(overlay);
+      setTimeout(() => {
+        overlay.classList.add('fade-out');
+        setTimeout(() => overlay.remove(), 500);
+      }, 1000);
+
+    } catch (e) {
+      console.error(e);
+      setProject(p => ({ ...p, terminalLogs: [...p.terminalLogs, "[FAULT] Neural rehydration failed."] }));
+    } finally {
+      setIsRehydrating(null);
+    }
+  };
+
   const renderTabContent = () => {
     switch (activeTab) {
       case "code":
         return (
-          <pre className="p-8 font-mono text-sm leading-relaxed text-emerald-400/90 selection:bg-emerald-500/20">
-            <code>{`export default function App() {
-  return <div>Ready for S</div>
-}`}</code>
-          </pre>
+          <div className="h-full flex flex-col">
+            <div className="flex-1 overflow-auto scrollbar-hide">
+              <pre className="p-8 font-mono text-sm leading-relaxed text-emerald-400/90 selection:bg-emerald-500/20">
+                <code>{project.currentFile ? project.fileSystem[project.currentFile] : "// Select a file to view source"}</code>
+              </pre>
+            </div>
+            {project.activeMemoryEpoch && (
+              <div className="p-3 bg-blue-500/5 border-t border-blue-500/20 flex items-center justify-between px-10 animate-in slide-in-from-bottom-2 duration-500">
+                <div className="flex items-center gap-3">
+                  <Anchor size={12} className="text-blue-400 animate-pulse" />
+                  <span className="text-[10px] font-black uppercase tracking-widest text-blue-400/80">Rehydrated from Epoch {project.activeMemoryEpoch}</span>
+                </div>
+                <button 
+                  onClick={() => setProject(p => ({ ...p, activeMemoryEpoch: null }))}
+                  className="text-[9px] font-bold text-slate-500 hover:text-white uppercase tracking-widest transition-colors"
+                >
+                  Clear Restoration
+                </button>
+              </div>
+            )}
+          </div>
         );
 
       case "preview":
@@ -120,7 +200,7 @@ export default function App() {
               }}
               className="flex items-center justify-center min-h-[300px] shadow-inner"
             >
-              <div className="text-2xl font-bold tracking-tight text-white">Ready for S</div>
+              <div className="text-2xl font-bold tracking-tight text-white">Project Synthesis Layer</div>
             </div>
           </div>
         );
@@ -128,21 +208,150 @@ export default function App() {
       case "tests":
         return (
           <div style={{ padding: "10px" }} className="animate-in fade-in duration-500">
-            <h3 style={{ marginBottom: "8px" }} className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Test Results</h3>
+            <h3 style={{ marginBottom: "8px" }} className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Formal Verification</h3>
             <ul className="space-y-4 py-4">
               {[
-                "Component renders without crashing",
-                "Displays correct text",
-                "No runtime errors detected"
+                "Component runtime integrity check",
+                "Neural semantic alignment",
+                "VFS boundary validation"
               ].map((test, i) => (
                 <li key={i} className="flex items-center gap-3 text-sm font-medium text-slate-300 group">
                   <div className="w-5 h-5 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 group-hover:scale-110 transition-transform">
                     <CheckCircle2 size={12} className="text-emerald-500" />
                   </div>
-                  ✓ {test}
+                  {test}
                 </li>
               ))}
             </ul>
+          </div>
+        );
+
+      case "memory":
+        return (
+          <div className="p-10 space-y-12 animate-in fade-in duration-500 overflow-y-auto h-full scrollbar-hide">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <h3 className="text-[14px] font-black uppercase tracking-[0.3em] text-white flex items-center gap-3">
+                  <Database size={16} className="text-blue-400" /> Neural Memory Vault
+                </h3>
+                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Architectural Summarization Layer</p>
+              </div>
+              <button 
+                onClick={runCompression}
+                disabled={isCompressing}
+                className={`flex items-center gap-3 px-6 py-3 rounded-xl border transition-all text-[11px] font-black uppercase tracking-widest ${isCompressing ? 'bg-blue-500/20 border-blue-500/40 text-blue-300' : 'bg-slate-900 border-slate-800 hover:border-blue-500/50 text-slate-300 hover:text-white'}`}
+              >
+                {isCompressing ? <Loader2 size={14} className="animate-spin" /> : <ArrowDownCircle size={14} />}
+                {isCompressing ? "Compressing Core..." : "Trigger Core Compression"}
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {/* Immutable Directives */}
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-[0.2em] text-slate-600">
+                    <ShieldCheck size={14} /> Immutable Directives
+                  </div>
+                  <button className="p-1 hover:bg-slate-800 rounded text-slate-700 transition-colors"><Plus size={12} /></button>
+                </div>
+                <div className="space-y-3">
+                  {project.immutableDirectives.map((d, i) => (
+                    <div key={i} className="p-4 bg-slate-900/40 border border-slate-800/60 rounded-2xl flex items-center gap-4 text-xs font-mono text-slate-300">
+                      <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]" />
+                      {d}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Memory Stats */}
+              <div className="space-y-6">
+                <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-[0.2em] text-slate-600">
+                  <Activity size={14} /> Context Density
+                </div>
+                <div className="p-6 bg-slate-900/40 border border-slate-800/60 rounded-3xl space-y-6">
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest">
+                      <span className="text-slate-500">Raw Context Volume</span>
+                      <span className="text-white">{(project.terminalLogs.length * 0.15).toFixed(1)} KB</span>
+                    </div>
+                    <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
+                      <div className="h-full bg-blue-500 transition-all duration-1000" style={{ width: `${Math.min(100, project.terminalLogs.length / 2)}%` }} />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest">
+                      <span className="text-slate-500">Effective Compression Ratio</span>
+                      <span className="text-emerald-400">
+                        {project.memorySummaries.length > 0 ? project.memorySummaries[project.memorySummaries.length - 1].compressionRatio : "1.0x"}
+                      </span>
+                    </div>
+                    <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
+                      <div className="h-full bg-emerald-500 w-[85%]" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Epoch Timeline */}
+            <div className="space-y-6 pt-6 pb-20">
+              <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-[0.2em] text-slate-600">
+                <History size={14} /> Memory Epochs
+              </div>
+              <div className="space-y-4">
+                {project.memorySummaries.slice().reverse().map((m, i) => (
+                  <div key={i} className={`p-6 bg-slate-900/20 border rounded-3xl space-y-4 group hover:bg-slate-900/30 transition-all ${project.activeMemoryEpoch === m.epoch ? 'border-blue-500/40 bg-blue-500/5' : 'border-slate-800/40'}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <span className={`text-[11px] font-black uppercase tracking-widest ${project.activeMemoryEpoch === m.epoch ? 'text-blue-400' : 'text-slate-500'}`}>Epoch {m.epoch}</span>
+                        {project.activeMemoryEpoch === m.epoch && (
+                          <span className="px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-[8px] font-black text-blue-400 uppercase tracking-widest">Active Focus</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <span className="text-[10px] font-mono text-slate-600">{new Date(m.timestamp).toLocaleTimeString()}</span>
+                        <button 
+                          onClick={() => handleRehydration(m)}
+                          disabled={isRehydrating === m.epoch}
+                          className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-[9px] font-black uppercase tracking-widest transition-all ${isRehydrating === m.epoch ? 'bg-blue-500/20 border-blue-500/40 text-blue-300' : 'bg-slate-950 border-slate-800 hover:border-blue-500/50 text-slate-400 hover:text-white'}`}
+                        >
+                          {isRehydrating === m.epoch ? <RefreshCw size={10} className="animate-spin" /> : <RefreshCw size={10} />}
+                          Restore Swarm Focus
+                        </button>
+                      </div>
+                    </div>
+                    <div className="space-y-3">
+                      <p className="text-xs text-slate-300 leading-relaxed font-mono italic">"{m.architecturalStatus}"</p>
+                      
+                      {m.structuralAnchors && (
+                        <div className="flex items-center gap-3 pt-2">
+                           <span className="text-[9px] font-black text-slate-700 uppercase tracking-widest">Anchors:</span>
+                           {m.structuralAnchors.map((anchor, ai) => (
+                             <span key={ai} className="px-2 py-0.5 bg-slate-900 border border-slate-800 rounded-md text-[9px] font-mono text-slate-500">{anchor}</span>
+                           ))}
+                        </div>
+                      )}
+
+                      <div className="flex flex-wrap gap-2 pt-2">
+                        {m.keyLearnings.map((k, ki) => (
+                          <span key={ki} className="px-2.5 py-1 rounded-md bg-emerald-500/5 border border-emerald-500/10 text-[9px] font-bold text-emerald-500/60 uppercase tracking-widest">
+                            {k}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {project.memorySummaries.length === 0 && (
+                  <div className="py-20 flex flex-col items-center justify-center border-2 border-dashed border-slate-800/30 rounded-3xl opacity-20 space-y-4">
+                    <Database size={40} strokeWidth={1} />
+                    <span className="text-[10px] font-black uppercase tracking-[0.3em]">Vault Empty</span>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         );
     }
@@ -202,7 +411,8 @@ export default function App() {
             await getCoderStreamResponse(
               file, project.plan, project.designSystem!, project.fileSystem, project.personality,
               (content) => setProject(p => ({ ...p, fileSystem: { ...p.fileSystem, [file]: content } })),
-              () => project.swarmPaused
+              () => project.swarmPaused,
+              task.contextOverride // Pass rehydration override if available
             );
           }
           setProject(p => ({ ...p, agentQueue: p.agentQueue.filter(t => t.id !== task.id) }));
@@ -290,8 +500,8 @@ export default function App() {
           
           <div className={`space-y-4 overflow-y-auto scrollbar-hide flex-1 ${isLeftCollapsed ? 'px-4' : 'px-2'}`}>
             <TelemetryCard label="Neural Load" value={`${project.resources.cpu.toFixed(1)}%`} color="emerald" icon={Cpu} isCollapsed={isLeftCollapsed} />
-            <TelemetryCard label="Swarm Capacity" value="98.2%" color="blue" icon={Layers} isCollapsed={isLeftCollapsed} />
-            <TelemetryCard label="Logic Vectors" value="1.04k" color="purple" icon={Binary} isCollapsed={isLeftCollapsed} />
+            <TelemetryCard label="Memory Density" value={project.memorySummaries.length > 0 ? project.memorySummaries[project.memorySummaries.length - 1].compressionRatio : "1.0x"} color="blue" icon={Database} isCollapsed={isLeftCollapsed} />
+            <TelemetryCard label="Logic Vectors" value={`${project.terminalLogs.length}`} color="purple" icon={Binary} isCollapsed={isLeftCollapsed} />
             
             {!isLeftCollapsed && (
               <div className="pt-6 animate-in fade-in duration-700">
@@ -299,16 +509,18 @@ export default function App() {
                   <summary className="flex items-center justify-between cursor-pointer list-none py-4 border-t border-slate-800/40">
                     <div className="flex items-center gap-3">
                       <ShieldCheck size={14} className="text-slate-600 group-open:text-emerald-400 transition-colors" />
-                      <span className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-500 group-hover:text-slate-300">Neural Directives</span>
+                      <span className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-500 group-hover:text-slate-300">Immutable Rules</span>
                     </div>
                     <ChevronDown size={14} className="text-slate-700 group-open:rotate-180 transition-transform" />
                   </summary>
-                  <div className="pb-4 space-y-4">
-                    <div className="p-5 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl relative overflow-hidden">
-                      <p className="text-[11px] text-emerald-300/60 leading-relaxed font-mono italic">
-                        "Synthesis is deterministic. Complexity bounds must stay within O(N log N)."
-                      </p>
-                    </div>
+                  <div className="pb-4 space-y-3">
+                    {project.immutableDirectives.map((d, i) => (
+                      <div key={i} className="p-3 bg-emerald-500/5 border border-emerald-500/10 rounded-xl relative overflow-hidden">
+                        <p className="text-[10px] text-emerald-300/60 leading-relaxed font-mono">
+                          • {d}
+                        </p>
+                      </div>
+                    ))}
                   </div>
                 </details>
 
@@ -322,7 +534,7 @@ export default function App() {
                         ? 'bg-emerald-500/5 border-emerald-500/20 shadow-2xl shadow-emerald-500/5' 
                         : 'bg-slate-900/40 border-slate-800/40 opacity-40 grayscale'
                     }`}>
-                      <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center justify-between mb-2">
                         <span className="text-[10px] font-bold uppercase tracking-widest flex items-center gap-2.5">
                           <div className={`w-1.5 h-1.5 rounded-full ${task.status === 'active' ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
                           {task.label}
@@ -346,28 +558,21 @@ export default function App() {
         <section className="flex-1 flex flex-col bg-slate-950/40 relative min-w-0">
           <div className="h-16 border-b border-slate-800/60 flex items-center px-10 justify-between bg-slate-950/20 backdrop-blur-xl shrink-0">
             
-            {/* --- REQUESTED TABS BLOCK --- */}
-            <div className="tabs">
-              <button
-                className={`tab px-6 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${activeTab === "code" ? "active bg-emerald-500/10 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.2)]" : "text-slate-500 hover:text-slate-300"}`}
-                onClick={() => setActiveTab("code")}
-              >
-                Code
-              </button>
-
-              <button
-                className={`tab px-6 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${activeTab === "preview" ? "active bg-emerald-500/10 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.2)]" : "text-slate-500 hover:text-slate-300"}`}
-                onClick={() => setActiveTab("preview")}
-              >
-                Preview
-              </button>
-
-              <button
-                className={`tab px-6 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${activeTab === "tests" ? "active bg-emerald-500/10 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.2)]" : "text-slate-500 hover:text-slate-300"}`}
-                onClick={() => setActiveTab("tests")}
-              >
-                Tests
-              </button>
+            <div className="tabs flex items-center gap-1 overflow-x-auto scrollbar-hide">
+              {[
+                { id: "code", label: "Code" },
+                { id: "preview", label: "Preview" },
+                { id: "tests", label: "Verify" },
+                { id: "memory", label: "Memory" }
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  className={`tab px-6 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${activeTab === tab.id ? "active bg-emerald-500/10 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.2)]" : "text-slate-500 hover:text-slate-300"}`}
+                  onClick={() => setActiveTab(tab.id as any)}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
 
             <div className="flex items-center gap-6 shrink-0">
@@ -378,8 +583,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* --- REQUESTED PANEL BODY --- */}
-          <div className="panel-body flex-1 relative overflow-hidden group bg-slate-950/40 overflow-y-auto scrollbar-hide">
+          <div className="panel-body flex-1 relative overflow-hidden group bg-slate-950/40">
             {project.status === 'busy' && (
               <div className="absolute inset-0 bg-emerald-500/[0.015] pointer-events-none z-10 scanner-active" />
             )}
@@ -431,7 +635,9 @@ export default function App() {
                 MODE: "text-amber-400",
                 AGENT: "text-purple-400",
                 FAULT: "text-red-400",
-                SYSTEM: "text-slate-400"
+                SYSTEM: "text-slate-400",
+                MEM_ARCH: "text-blue-500",
+                SYNC: "text-cyan-400"
               }[tag] || "text-slate-500";
 
               return (
@@ -493,7 +699,7 @@ export default function App() {
             <span className="hidden sm:inline">Core: <span className="text-slate-400 font-bold tracking-normal">G3-Pro-Competitive</span></span>
           </div>
           <div className="h-4 w-px bg-slate-800/80" />
-          <span className="text-emerald-500/40">PRO BUILD v3.0.42</span>
+          <span className="text-emerald-500/40">PRO BUILD v4.2.0-Restoration</span>
         </div>
       </footer>
     </div>

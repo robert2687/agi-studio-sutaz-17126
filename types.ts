@@ -4,6 +4,7 @@ export interface User {
 }
 
 export type PersonalityProfile = "Minimalist" | "Enterprise" | "Playful" | "Experimental" | "Competitive";
+export type ThemeMode = "dark" | "light";
 
 export interface DesignSystem {
   metadata: {
@@ -107,6 +108,7 @@ export interface MemorySummary {
   unresolvedIssues: string[];
   compressionRatio: string;
   keyLearnings: string[];
+  structuralAnchors?: string[];
 }
 
 export interface AgentTask {
@@ -116,6 +118,7 @@ export interface AgentTask {
   priority: number;
   status: 'pending' | 'active' | 'completed' | 'failed';
   injected?: boolean;
+  contextOverride?: string;
 }
 
 export type AgentStatus = "idle" | "busy" | "ready" | "error";
@@ -125,6 +128,12 @@ export interface ResourceMetrics {
   memory: number;
   vfsSize: number;
   processes: string[];
+}
+
+export interface LayoutConfig {
+  order: string[];
+  widths: Record<string, number>;
+  collapsed: Record<string, boolean>;
 }
 
 export interface ProjectState {
@@ -151,6 +160,7 @@ export interface ProjectState {
   swarmPaused: boolean;
   terminalLogs: string[];
   memorySummaries: MemorySummary[];
+  activeMemoryEpoch: number | null;
   status: AgentStatus;
   currentFile: string | null;
   activeTab: 'code' | 'sandbox' | 'memory' | 'validator' | 'preview' | 'tests';
@@ -163,6 +173,8 @@ export interface ProjectState {
   onboarding: OnboardingState;
   immutableDirectives: string[];
   testCases: TestCase[];
+  theme: ThemeMode;
+  layout: LayoutConfig;
 }
 
 export interface ReviewReport {
