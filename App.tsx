@@ -1,14 +1,12 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Cpu, Zap, ShieldCheck, Loader2, 
   Terminal, Binary, Code2, Microscope, Plus, 
-  CheckCircle2, TrendingUp, FastForward, 
+  CheckCircle2, FastForward, 
   ChevronDown, Settings2, Eye, FileText,
-  RefreshCcw, Rocket, Layers, BrainCircuit, Maximize2, Minimize2,
+  Rocket, Layers, BrainCircuit, Maximize2, Minimize2,
   LayoutGrid
 } from 'lucide-react';
-import Editor from "@monaco-editor/react";
 import { 
   ProjectState, AgentTask, AgentType
 } from './types';
@@ -93,94 +91,66 @@ export default function App() {
   const [isRightCollapsed, setIsRightCollapsed] = useState(false);
   const [highlightedLogIndex, setHighlightedLogIndex] = useState<number | null>(null);
   const isExecutingRef = useRef(false);
-  const monacoRef = useRef<any>(null);
+
+  // --- REQUESTED LOCAL TAB STATE ---
+  const [activeTab, setActiveTab] = useState<"code" | "preview" | "tests">("code");
+
+  // --- REQUESTED RENDER LOGIC ---
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case "code":
+        return (
+          <pre className="p-8 font-mono text-sm leading-relaxed text-emerald-400/90 selection:bg-emerald-500/20">
+            <code>{`export default function App() {
+  return <div>Ready for S</div>
+}`}</code>
+          </pre>
+        );
+
+      case "preview":
+        return (
+          <div style={{ padding: "10px" }} className="animate-in fade-in duration-500">
+            <h3 style={{ marginBottom: "8px" }} className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Live Preview</h3>
+            <div
+              style={{
+                padding: "12px",
+                borderRadius: "8px",
+                background: "rgba(255,255,255,0.05)",
+                border: "1px solid rgba(255,255,255,0.1)",
+              }}
+              className="flex items-center justify-center min-h-[300px] shadow-inner"
+            >
+              <div className="text-2xl font-bold tracking-tight text-white">Ready for S</div>
+            </div>
+          </div>
+        );
+
+      case "tests":
+        return (
+          <div style={{ padding: "10px" }} className="animate-in fade-in duration-500">
+            <h3 style={{ marginBottom: "8px" }} className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Test Results</h3>
+            <ul className="space-y-4 py-4">
+              {[
+                "Component renders without crashing",
+                "Displays correct text",
+                "No runtime errors detected"
+              ].map((test, i) => (
+                <li key={i} className="flex items-center gap-3 text-sm font-medium text-slate-300 group">
+                  <div className="w-5 h-5 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 group-hover:scale-110 transition-transform">
+                    <CheckCircle2 size={12} className="text-emerald-500" />
+                  </div>
+                  ✓ {test}
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+    }
+  };
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(project));
   }, [project]);
-
-  // Handle Log Highlighting from Code Lens
-  const handleLogRequest = useCallback((agentType: string) => {
-    const index = project.terminalLogs.findLastIndex(log => 
-      log.toUpperCase().includes(agentType.toUpperCase()) ||
-      (agentType === 'architect' && log.includes('KERNEL')) ||
-      (agentType === 'manager' && log.includes('SYSTEM'))
-    );
-    
-    if (index !== -1) {
-      setHighlightedLogIndex(index);
-      setTimeout(() => setHighlightedLogIndex(null), 3500);
-      
-      const logElements = document.querySelectorAll('.log-entry');
-      if (logElements[index]) {
-        logElements[index].scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-    }
-    
-    // Auto-expand right panel if collapsed so user can see the link
-    if (isRightCollapsed) setIsRightCollapsed(false);
-  }, [project.terminalLogs, isRightCollapsed]);
-
-  // Monaco Code Lens Logic
-  const handleEditorMount = (editor: any, monaco: any) => {
-    monacoRef.current = monaco;
-
-    monaco.languages.registerCodeLensProvider('typescript', {
-      provideCodeLenses: (model: any) => {
-        const lenses: any[] = [];
-        const text = model.getValue();
-        const lines = text.split('\n');
-
-        lines.forEach((line: string, i: number) => {
-          const trimmed = line.trim();
-          // Detect meaningful code blocks for attribution
-          const isSignificant = /^(export|function|class|interface|type|const\s+\w+\s+=|import)/.test(trimmed);
-          
-          if (isSignificant) {
-            const lineNumber = i + 1;
-            let agentLabel = "Coded by Coder";
-            let agentType = "coder";
-            
-            if (trimmed.startsWith('import')) {
-              agentLabel = "Resolved by Architect";
-              agentType = "architect";
-            } else if (trimmed.startsWith('interface') || trimmed.startsWith('type')) {
-              agentLabel = "Planned by Planner";
-              agentType = "planner";
-            } else if (trimmed.includes('className') || trimmed.includes('style') || /color|bg-|text-|shadow-/.test(line)) {
-              agentLabel = "Styled by Designer";
-              agentType = "designer";
-            } else if (trimmed.includes('try') || trimmed.includes('catch') || trimmed.includes('ErrorBoundary')) {
-              agentLabel = "Fixed by Patcher";
-              agentType = "patcher";
-            }
-
-            lenses.push({
-              range: {
-                startLineNumber: lineNumber,
-                startColumn: 1,
-                endLineNumber: lineNumber,
-                endColumn: 1,
-              },
-              command: {
-                id: 'agentic-studio.viewLog',
-                title: `✨ ${agentLabel}`,
-                arguments: [agentType]
-              }
-            });
-          }
-        });
-
-        return { lenses, dispose: () => {} };
-      },
-      resolveCodeLens: (model: any, codeLens: any) => codeLens
-    });
-
-    // Register internal command to link lenses to logs
-    monaco.editor.registerCommand('agentic-studio.viewLog', (_accessor: any, agentType: string) => {
-      handleLogRequest(agentType);
-    });
-  };
 
   const processQueue = useCallback(async () => {
     if (isExecutingRef.current || project.swarmPaused) return;
@@ -306,7 +276,7 @@ export default function App() {
 
       <main className="flex-1 flex overflow-hidden">
         
-        {/* LEFT PANEL: NEURAL PIPELINE */}
+        {/* LEFT PANEL */}
         <aside className={`transition-all duration-500 ease-in-out flex flex-col bg-slate-950/20 border-r border-slate-800/60 overflow-hidden ${isLeftCollapsed ? 'w-[72px]' : 'w-[24rem] p-8'}`}>
           <div className={`${isLeftCollapsed ? 'p-4' : ''}`}>
             <PanelHeader 
@@ -359,9 +329,6 @@ export default function App() {
                         </span>
                         {task.status === 'active' && <Loader2 size={12} className="animate-spin text-emerald-400" />}
                       </div>
-                      <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                        <div className={`h-full bg-emerald-500/50 transition-all duration-1000 ${task.status === 'active' ? 'w-[72%]' : 'w-0'}`} />
-                      </div>
                     </div>
                   )) : (
                     <div className="py-16 flex flex-col items-center justify-center border-2 border-dashed border-slate-800/30 rounded-3xl opacity-20 space-y-4">
@@ -375,29 +342,34 @@ export default function App() {
           </div>
         </aside>
 
-        {/* CENTER PANEL: CODE SURFACE */}
+        {/* CENTER PANEL */}
         <section className="flex-1 flex flex-col bg-slate-950/40 relative min-w-0">
           <div className="h-16 border-b border-slate-800/60 flex items-center px-10 justify-between bg-slate-950/20 backdrop-blur-xl shrink-0">
-            <div className="flex items-center gap-12 overflow-x-auto scrollbar-hide">
-              {[
-                { id: 'code', icon: Code2, label: 'Code' },
-                { id: 'preview', icon: Eye, label: 'Preview' },
-                { id: 'tests', icon: Microscope, label: 'Tests' }
-              ].map(tab => (
-                <button 
-                  key={tab.id}
-                  onClick={() => setProject(p => ({ ...p, activeTab: tab.id as any }))}
-                  className={`flex items-center gap-3 text-[11px] font-black uppercase tracking-[0.25em] transition-all border-b-2 py-5.5 whitespace-nowrap ${
-                    project.activeTab === tab.id 
-                      ? 'text-emerald-400 border-emerald-500 shadow-[0_4px_15px_-4px_rgba(16,185,129,0.4)]' 
-                      : 'text-slate-500 border-transparent hover:text-slate-300'
-                  }`}
-                >
-                  <tab.icon size={15} />
-                  {tab.label}
-                </button>
-              ))}
+            
+            {/* --- REQUESTED TABS BLOCK --- */}
+            <div className="tabs">
+              <button
+                className={`tab px-6 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${activeTab === "code" ? "active bg-emerald-500/10 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.2)]" : "text-slate-500 hover:text-slate-300"}`}
+                onClick={() => setActiveTab("code")}
+              >
+                Code
+              </button>
+
+              <button
+                className={`tab px-6 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${activeTab === "preview" ? "active bg-emerald-500/10 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.2)]" : "text-slate-500 hover:text-slate-300"}`}
+                onClick={() => setActiveTab("preview")}
+              >
+                Preview
+              </button>
+
+              <button
+                className={`tab px-6 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${activeTab === "tests" ? "active bg-emerald-500/10 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.2)]" : "text-slate-500 hover:text-slate-300"}`}
+                onClick={() => setActiveTab("tests")}
+              >
+                Tests
+              </button>
             </div>
+
             <div className="flex items-center gap-6 shrink-0">
               <div className="hidden sm:flex items-center gap-2.5 px-3.5 py-1.5 rounded-lg bg-slate-900/60 border border-slate-800/80 shadow-inner">
                 <FileText size={13} className="text-blue-400/60" />
@@ -406,42 +378,12 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex-1 relative overflow-hidden group">
+          {/* --- REQUESTED PANEL BODY --- */}
+          <div className="panel-body flex-1 relative overflow-hidden group bg-slate-950/40 overflow-y-auto scrollbar-hide">
             {project.status === 'busy' && (
               <div className="absolute inset-0 bg-emerald-500/[0.015] pointer-events-none z-10 scanner-active" />
             )}
-            
-            {project.activeTab === 'code' ? (
-              <Editor 
-                height="100%" 
-                language="typescript" 
-                theme="vs-dark" 
-                value={project.currentFile ? project.fileSystem[project.currentFile] : ""}
-                onMount={handleEditorMount}
-                options={{
-                  fontSize: 14,
-                  fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                  minimap: { enabled: false },
-                  scrollBeyondLastLine: false,
-                  padding: { top: 32, bottom: 32 },
-                  lineHeight: 1.8,
-                  cursorBlinking: "smooth",
-                  cursorSmoothCaretAnimation: "on",
-                  roundedSelection: true,
-                  automaticLayout: true,
-                  codeLens: true,
-                  scrollbar: { vertical: 'hidden', horizontal: 'hidden' }
-                }}
-              />
-            ) : (
-              <div className="w-full h-full flex flex-col items-center justify-center p-16 text-center bg-[#0a0b14]/60">
-                <LayoutGrid size={56} strokeWidth={1} className="opacity-20 mb-10 text-slate-700" />
-                <h3 className="text-[16px] font-black uppercase tracking-[0.4em] text-white">Surface Initializing</h3>
-                <p className="text-[12px] text-slate-500 max-w-sm mx-auto leading-relaxed font-medium mt-6 tracking-wide">
-                  The competitive surface is being synthesized. Synchronizing neural buffers...
-                </p>
-              </div>
-            )}
+            {renderTabContent()}
           </div>
 
           {/* Neural Prompt Field */}
@@ -465,7 +407,7 @@ export default function App() {
           </div>
         </section>
 
-        {/* RIGHT PANEL: NEURAL LOGS */}
+        {/* RIGHT PANEL */}
         <aside className={`transition-all duration-500 ease-in-out flex flex-col bg-slate-950/20 border-l border-slate-800/60 overflow-hidden ${isRightCollapsed ? 'w-[72px]' : 'w-[22rem] p-8'}`}>
           <div className={`${isRightCollapsed ? 'p-4' : ''}`}>
             <PanelHeader 

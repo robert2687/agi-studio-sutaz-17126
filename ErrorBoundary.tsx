@@ -1,7 +1,7 @@
 
-import React, { Component } from 'react';
+// Explicitly import from 'react' to fix inheritance resolution issues
+import React, { ErrorInfo, ReactNode } from 'react';
 import { AlertOctagon, RotateCcw, RefreshCw } from 'lucide-react';
-import type { ErrorInfo, ReactNode } from 'react';
 
 interface Props {
   children?: ReactNode;
@@ -15,11 +15,11 @@ interface State {
 
 /**
  * ErrorBoundary: Catches rendering errors and provides recovery options.
- * Using Component<Props, State> ensure the compiler correctly resolves 'state', 'setState', and 'props'.
+ * Using React.Component<Props, State> ensures the compiler correctly resolves 'state', 'setState', and 'props'.
  */
-export class ErrorBoundary extends Component<Props, State> {
-  // Explicitly initialize state as a class property to ensure it's recognized by the TypeScript compiler
-  public state: State = {
+export class ErrorBoundary extends React.Component<Props, State> {
+  // Explicitly initialize state as a class property
+  public override state: State = {
     hasError: false,
     error: null,
     errorInfo: null,
@@ -33,9 +33,13 @@ export class ErrorBoundary extends Component<Props, State> {
     return { hasError: true, error, errorInfo: null };
   }
 
-  // Handle side effects on error and update state using this.setState inherited from Component
-  public componentDidCatch(error: any, errorInfo: ErrorInfo) {
+  /**
+   * Fix: Handle side effects on error and update state using this.setState inherited from React.Component.
+   * Using explicit React.Component ensures the compiler recognizes inherited members.
+   */
+  public override componentDidCatch(error: any, errorInfo: ErrorInfo) {
     console.error("ErrorBoundary caught an error", error, errorInfo);
+    // Explicitly update state when an error is captured; setState is inherited from React.Component
     this.setState({ errorInfo });
   }
 
@@ -49,8 +53,12 @@ export class ErrorBoundary extends Component<Props, State> {
     window.location.reload();
   };
 
-  public render() {
-    // Access this.state from the base Component class to check for captured errors
+  /**
+   * Fix: Ensure render method correctly returns this.props.children.
+   * Using explicit React.Component ensures the compiler recognizes inherited 'props'.
+   */
+  public override render() {
+    // Check state captured by the ErrorBoundary instance
     if (this.state.hasError) {
       return (
         <div className="flex flex-col items-center justify-center min-h-screen bg-[#020617] p-6 text-slate-200 font-sans">
@@ -73,7 +81,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 <span className="text-[10px] font-mono text-red-400/50 bg-red-400/5 px-2 py-0.5 rounded uppercase">CRITICAL_FAULT</span>
               </div>
               <div className="bg-black/40 border border-slate-800 rounded-2xl p-6 font-mono text-[11px] leading-relaxed text-slate-300 overflow-auto max-h-48 scrollbar-hide">
-                {/* Access state.error properly from the instance context */}
+                {/* Properly display error stack or message */}
                 {String(this.state.error?.stack || this.state.error || "Unknown system fault.")}
               </div>
             </div>
@@ -99,7 +107,7 @@ export class ErrorBoundary extends Component<Props, State> {
         </div>
       );
     }
-    // Correctly return this.props.children from the inherited Component class
+    // Correctly return children from the React.Component base class; props is inherited from React.Component
     return this.props.children;
   }
 }
