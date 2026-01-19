@@ -4,7 +4,6 @@ export interface User {
 }
 
 export type PersonalityProfile = "Minimalist" | "Enterprise" | "Playful" | "Experimental" | "Competitive";
-export type ThemeMode = "dark" | "light";
 
 export interface DesignSystem {
   metadata: {
@@ -108,7 +107,7 @@ export interface MemorySummary {
   unresolvedIssues: string[];
   compressionRatio: string;
   keyLearnings: string[];
-  structuralAnchors?: string[];
+  structuralAnchors?: string[]; // New: key files/components that define the architecture
 }
 
 export interface AgentTask {
@@ -118,24 +117,16 @@ export interface AgentTask {
   priority: number;
   status: 'pending' | 'active' | 'completed' | 'failed';
   injected?: boolean;
-  contextOverride?: string;
+  contextOverride?: string; // New: used to pass memory summaries to the agent
 }
 
-export type AgentStatus = "idle" | "busy" | "ready" | "error" | "patching";
+export type AgentStatus = "idle" | "busy" | "ready" | "error";
 
 export interface ResourceMetrics {
   cpu: number;
   memory: number;
   vfsSize: number;
-  vfsHealth: number;
-  entropy: number;
   processes: string[];
-}
-
-export interface LayoutConfig {
-  order: string[];
-  widths: Record<string, number>;
-  collapsed: Record<string, boolean>;
 }
 
 export interface ProjectState {
@@ -162,7 +153,7 @@ export interface ProjectState {
   swarmPaused: boolean;
   terminalLogs: string[];
   memorySummaries: MemorySummary[];
-  activeMemoryEpoch: number | null;
+  activeMemoryEpoch: number | null; // New: tracks which memory is currently "rehydrated"
   status: AgentStatus;
   currentFile: string | null;
   activeTab: 'code' | 'sandbox' | 'memory' | 'validator' | 'preview' | 'tests';
@@ -175,8 +166,6 @@ export interface ProjectState {
   onboarding: OnboardingState;
   immutableDirectives: string[];
   testCases: TestCase[];
-  theme: ThemeMode;
-  layout: LayoutConfig;
 }
 
 export interface ReviewReport {
