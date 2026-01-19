@@ -138,6 +138,14 @@ export const rehydrateFocus = async (
 ): Promise<string> =>
 {
   const ai = getAI();
+  const prompt = `ROLE: Context Aligner.
+    TASK: Convert a Memory Epoch Summary into a set of 'Focus Directives' for a coding agent.
+    SUMMARY: ${ JSON.stringify( summary ) }
+    PERSONALITY: ${ personality }
+
+    OBJECTIVE: Remind the agent of the architectural intent and design constraints captured in this epoch.
+    Be authoritative and precise. Ensure they don't drift from the primary mission.`;
+
   const response = await ai.models.generateContent( { model: PRO_MODEL, contents: [ prompt ] } );
   return response.text || "Maintain architectural alignment with defined intent.";
 };
@@ -152,6 +160,15 @@ export const getCopilotEdit = async (
 ) =>
 {
   const ai = getAI();
+  const prompt = `ROLE: Neural Copilot. PERSONALITY: ${ personality }.
+
+  TASK: ${ instruction }
+  SELECTION: ${ selection || "Full context provided." }
+  FILE_CONTENT: ${ fullFile }
+  DESIGN_SYSTEM: ${ JSON.stringify( design ) }
+
+  Respond ONLY with raw code. No markdown. No comments outside the code.`;
+
   const result = await ai.models.generateContentStream( { model: PRO_MODEL, contents: [ prompt ] } );
   let content = "";
   for await ( const chunk of result )
@@ -297,6 +314,15 @@ export const getCoderStreamResponse = async (
 ) =>
 {
   const ai = getAI();
+  const prompt = `Synthesize FILE: ${ fileName }.
+  CONTEXT_OVERRIDE: ${ contextOverride || "None." }
+  PLAN: ${ JSON.stringify( plan ) }
+  DESIGN: ${ JSON.stringify( design ) }
+  VFS: ${ Object.keys( fileSystem ).join( ', ' ) }
+  STYLE: ${ getPersonalityInstruction( personality ) }
+
+  REQUIREMENT: Output ONLY code. No markdown code blocks.`;
+
   const result = await ai.models.generateContentStream( { model: PRO_MODEL, contents: [ prompt ] } );
 
   let fullText = "";
